@@ -11,7 +11,7 @@
 // ============================================================
 
 void setup() {
-  size(1350, 680, P2D);
+  size(1350, 940, P2D);
   textSize(14);
   textAlign(LEFT, BASELINE);
 
@@ -19,6 +19,7 @@ void setup() {
   initDecoupling();   // Decoupling.pde — build S and D matrices
   initForceView();    // ForceView.pde  — 3D arrows + bar chart
   initPressureGrid(); // PressureGrid.pde — Z-axis pressure surface
+  initPlot();         // SensorPlot.pde  — real-time Bx/By/Bz waveform
   initBaseline();     // Baseline.pde   — begin 300-sample calibration
 }
 
@@ -32,6 +33,11 @@ void draw() {
     fill(255, 80, 80);
     text("[ Serial port not connected ]  Check device and restart", 30, 40);
     return;
+  }
+
+  // --- always push sensor data into waveform buffer ---
+  if (newDataAvailable) {
+    updatePlot();
   }
 
   // --- baseline calibration phase ---
@@ -101,6 +107,9 @@ void draw() {
 
   // --- Z-axis pressure surface ---
   drawPressureGrid();
+
+  // --- real-time sensor waveform ---
+  drawPlot();
 
   // --- interactive matrix overlay (on top of everything) ---
   drawMatrixHUD();
