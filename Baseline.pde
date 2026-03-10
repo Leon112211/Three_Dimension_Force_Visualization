@@ -1,0 +1,177 @@
+// ============================================================
+// Baseline.pde
+// 上电后对 X / Y / Z 轴各采集 300 个样本，计算均值作为零力基线。
+// 采样期间以进度条显示当前进度。
+//
+// 公开接口：
+//   initBaseline()       — 在 setup() 中调用，启动采样状态机
+//   updateBaseline()     — 在 draw() 中每帧调用（仅当 newDataAvailable）
+//   isBaselineDone()     — 三轴均完成后返回 true
+//   drawBaselineHUD()    — 采样未完成时渲染进度界面
+//
+// 完成后可用全局变量：
+//   baselineX / baselineY / baselineZ  (float, uT)
+// ============================================================
+
+static final int BASELINE_SAMPLES = 300;
+
+// --- state constants ---
+static final int BS_IDLE = 0;
+static final int BS_X    = 1;
+static final int BS_Y    = 2;
+static final int BS_Z    = 3;
+static final int BS_DONE = 4;
+
+// --- results ---
+float baselineX = 0;
+float baselineY = 0;
+float baselineZ = 0;
+
+// --- internal ---
+int   _bsState  = BS_IDLE;
+int   _bsCount  = 0;
+float _bsAccum  = 0;
+
+// ============================================================
+void initBaseline() {
+  _bsState = BS_X;
+  _bsCount = 0;
+  _bsAccum = 0;
+  println("[Baseline] Starting calibration — X axis  (0/" + BASELINE_SAMPLES + ")");
+}
+
+// ============================================================
+// Call once per new data frame while !isBaselineDone()
+// ============================================================
+void updateBaseline() {
+  if (_bsState == BS_IDLE || _bsState == BS_DONE) return;
+
+  // accumulate the channel matching the current phase
+  switch (_bsState) {
+    case BS_X: _bsAccum += sensorBx; break;
+    case BS_Y: _bsAccum += sensorBy; break;
+    case BS_Z: _bsAccum += sensorBz; break;
+  }
+  _bsCount++;
+
+  // phase complete
+  if (_bsCount >= BASELINE_SAMPLES) {
+    float mean = _bsAccum / BASELINE_SAMPLES;
+    switch (_bsState) {
+      case BS_X:
+        baselineX = mean;
+        println("[Baseline] X done — mean Bx = " + nf(baselineX, 1, 4) + " uT");
+        _bsState = BS_Y;
+        break;
+      case BS_Y:
+        baselineY = mean;
+        println("[Baseline] Y done — mean By = " + nf(baselineY, 1, 4) + " uT");
+        _bsState = BS_Z;
+        break;
+      case BS_Z:
+        baselineZ = mean;
+        println("[Baseline] Z done — mean Bz = " + nf(baselineZ, 1, 4) + " uT");
+        _bsState = BS_DONE;
+        println("[Baseline] Calibration complete.");
+        break;
+    }
+    _bsCount = 0;
+    _bsAccum = 0;
+  }
+}
+
+// ============================================================
+boolean isBaselineDone() {
+  return _bsState == BS_DONE;
+}
+
+// ============================================================
+// drawBaselineHUD()
+// Renders a centered calibration overlay.
+// Call only while !isBaselineDone().
+// ============================================================
+void drawBaselineHUD() {
+  // --- overlay panel ---
+  int panelW = 480;
+  int panelH = 180;
+  int px     = (width  - panelW) / 2;
+  int py     = (height - panelH) / 2;
+
+  // background
+  fill(20, 20, 30, 220);
+  noStroke();
+  rect(px, py, panelW, panelH, 10);
+
+  // panel border
+  stroke(100, 160, 255, 160);
+  strokeWeight(1.5);
+  noFill();
+  rect(px, py, panelW, panelH, 10);
+  strokeWeight(1);
+  noStroke();
+
+  // --- axis label & instruction ---
+  String axisLabel = (_bsState == BS_X) ? "X" : (_bsState == BS_Y) ? "Y" : "Z";
+  int    phase     = (_bsState == BS_X) ? 1   : (_bsState == BS_Y) ? 2   : 3;
+
+  fill(180, 220, 255);
+  textSize(15);
+  textAlign(CENTER, TOP);
+  text("Baseline Calibration  [" + phase + "/3]", px + panelW/2, py + 18);
+
+  fill(255, 220, 80);
+  textSize(22);
+  text("Sampling " + axisLabel + " axis — hold sensor steady", px + panelW/2, py + 48);
+
+  // --- progress bar ---
+  int barX = px + 30;
+  int barY = py + 95;
+  int barW = panelW - 60;
+  int barH = 22;
+
+  float progress = (float) _bsCount / BASELINE_SAMPLES;
+
+  // track
+  fill(50, 50, 70);
+  noStroke();
+  rect(barX, barY, barW, barH, 4);
+
+  // fill
+  color barColor = lerpColor(color(80, 160, 255), color(80, 255, 160), progress);
+  fill(barColor);
+  rect(barX, barY, barW * progress, barH, 4);
+
+  // count label
+  fill(220);
+  textSize(13);
+  text(_bsCount + " / " + BASELINE_SAMPLES, px + panelW/2, barY + barH + 10);
+
+  // overall phase dots
+  drawPhaseDots(px + panelW/2, py + panelH - 18, phase);
+
+  // reset alignment
+  textAlign(LEFT, BASELINE);
+  textSize(14);
+}
+
+// ============================================================
+// Helper — three phase-indicator dots
+// ============================================================
+void drawPhaseDots(int cx, int cy, int currentPhase) {
+  int dotR  = 6;
+  int gap   = 22;
+  int startX = cx - gap;
+
+  for (int i = 1; i <= 3; i++) {
+    int dx = startX + (i - 1) * gap;
+    if (i < currentPhase) {
+      fill(80, 255, 160);   // completed
+    } else if (i == currentPhase) {
+      fill(255, 220, 80);   // active
+    } else {
+      fill(80, 80, 100);    // pending
+    }
+    noStroke();
+    ellipse(dx, cy, dotR * 2, dotR * 2);
+  }
+}
