@@ -5,14 +5,11 @@ H2 H4 H6代表的是不同传感器的型号
 
 并总结出一个CSV文件：对于某一个传感器，当某一个轴受力的时候，另外两个轴的对应的灵敏度（比如：H2传感器在Z轴受力的时候，XY的灵敏度，H2传感器在X轴受力的时候，YZ的灵敏度，H2传感器在Y轴受力的时候，XZ的灵敏度）
 格式如下：
-Sensor	Force Axis	Main Axis Sensitivity	Cross Axis 1	Cross Axis 1 Sensitivity	Cross Axis 2	Cross Axis 2 Sensitivity
-H2		X			？					Y			？						Z			？
-H2		Y			？					X			？						Z			？
-H2		Z			？					X			？						Y			？
-H4		X			？					Y			？						Z			？
-H4		Y			？					X			？						Z			？
-H4		Z			？					X			？						Y			？
-H6		X			？					Y			？						Z			？
-H6		Y			？					X			？						Z			？
-H6		Z			？					X			？						Y			？
+
+H2						H4						H6					
+主受力轴	灵敏度(uT/N)	耦合轴1	灵敏度(uT/N)	耦合轴2	灵敏度(uT/N)	主受力轴	灵敏度(uT/N)	耦合轴1	灵敏度(uT/N)	耦合轴2	灵敏度(uT/N)	主受力轴	灵敏度(uT/N)	耦合轴1	灵敏度(uT/N)	耦合轴2	灵敏度(uT/N)
+X		Y		Z		X		Y		Z		X		Y		Z	
+Y		Z		X		Y		Z		X		Y		Z		X	
+Z		X		Y		Z		X		Y		Z		X		Y	
+
 导出这份csv文件
