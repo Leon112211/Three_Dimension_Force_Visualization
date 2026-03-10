@@ -139,7 +139,7 @@ void drawBaselineHUD() {
     fill(220);
     textSize(11);
     textAlign(LEFT, CENTER);
-    text(nf(progress * 100, 1, 0) + "%", barX + barW + 6, barY + barH / 2);
+    text(int(progress * 100) + "%", barX + barW + 6, barY + barH / 2);
   }
 
   // reset text state
