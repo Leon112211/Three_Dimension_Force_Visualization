@@ -11,13 +11,14 @@
 // ============================================================
 
 void setup() {
-  size(900, 600, P2D);
+  size(1350, 680, P2D);
   textSize(14);
   textAlign(LEFT, BASELINE);
 
   initReceiver();     // SensorReceiver.pde
   initDecoupling();   // Decoupling.pde — build S and D matrices
   initForceView();    // ForceView.pde  — 3D arrows + bar chart
+  initPressureGrid(); // PressureGrid.pde — Z-axis pressure surface
   initBaseline();     // Baseline.pde   — begin 300-sample calibration
 }
 
@@ -98,6 +99,9 @@ void draw() {
   // --- 3D force view + bar chart ---
   drawForceView();
 
+  // --- Z-axis pressure surface ---
+  drawPressureGrid();
+
   // --- interactive matrix overlay (on top of everything) ---
   drawMatrixHUD();
 }
@@ -111,4 +115,5 @@ void keyPressed() {
 
 void mouseDragged() {
   handleFVDrag();
+  handlePGDrag();
 }
