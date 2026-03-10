@@ -1,7 +1,13 @@
 // ============================================================
-// TDF_Visual.pde — 主入口
-// 三维力传感器（TDF）数据可视化
-// 传感器型号：H2 / H4 / H6
+// TDF_Visual.pde — Main entry
+// Three-Dimensional Force Sensor Visualization
+// Sensor models: H2 / H4 / H6
+//
+// Flow: Serial CSV → Baseline calibration → Decoupling F=D*dV → HUD
+// Keyboard shortcuts:
+//   [M]   Toggle matrix panel
+//   [T]   Toggle S / D view
+//   [1/2/3] Select sensor H2 / H4 / H6
 // ============================================================
 
 void setup() {
@@ -9,52 +15,92 @@ void setup() {
   textSize(14);
   textAlign(LEFT, BASELINE);
 
-  initReceiver();   // SensorReceiver.pde
-  initBaseline();   // Baseline.pde — begin 3-axis calibration
+  initReceiver();     // SensorReceiver.pde
+  initDecoupling();   // Decoupling.pde — build S and D matrices
+  initBaseline();     // Baseline.pde   — begin 300-sample calibration
 }
 
 void draw() {
   background(30);
 
-  // 轮询串口数据（事件驱动模式下保持调用以支持未来扩展）
   updateReceiver();
 
-  // --- connection status ---
+  // --- serial not connected ---
   if (!isReceiverReady()) {
     fill(255, 80, 80);
     text("[ Serial port not connected ]  Check device and restart", 30, 40);
     return;
   }
 
-  // --- baseline calibration (blocks normal display until done) ---
+  // --- baseline calibration phase ---
   if (newDataAvailable && !isBaselineDone()) {
     updateBaseline();
   }
-
   if (!isBaselineDone()) {
     drawBaselineHUD();
     newDataAvailable = false;
     return;
   }
 
-  // --- live magnetic field readout (post-calibration) ---
-  fill(180, 220, 255);
-  text("Single Sensor — Live Magnetic Field (uT)", 30, 40);
+  // --- compute decoupled force ---
+  float dVx = sensorBx - baselineX;
+  float dVy = sensorBy - baselineY;
+  float dVz = sensorBz - baselineZ;
+  computeForce(dVx, dVy, dVz);
 
+  // --- header ---
+  fill(180, 220, 255);
+  text("Sensor: " + SENSOR_NAMES[activeSensor]
+       + "   |   [M] Matrix   [1/2/3] Sensor   [T] S/D", 30, 30);
+
+  // --- magnetic field readout ---
+  int col1 = 30;
+  int col2 = 280;
+  int rowY = 60;
+  int rowH = 26;
+
+  fill(100, 160, 220);
+  textSize(12);
+  text("Magnetic field (uT)", col1, rowY);
+  text("Decoupled force (N)", col2, rowY);
+
+  textSize(14);
   color dataColor = newDataAvailable ? color(100, 255, 150) : color(160);
   fill(dataColor);
-  text("Bx = " + nf(sensorBx, 1, 3) + "   dBx = " + nf(sensorBx - baselineX, 1, 3), 30,  80);
-  text("By = " + nf(sensorBy, 1, 3) + "   dBy = " + nf(sensorBy - baselineY, 1, 3), 30, 110);
-  text("Bz = " + nf(sensorBz, 1, 3) + "   dBz = " + nf(sensorBz - baselineZ, 1, 3), 30, 140);
 
-  fill(120);
-  textSize(12);
-  text("Baseline  Bx=" + nf(baselineX,1,3) + "  By=" + nf(baselineY,1,3) + "  Bz=" + nf(baselineZ,1,3), 30, 170);
+  // Bx / dBx / Fx
+  rowY += rowH;
+  text("Bx=" + nf(sensorBx, 1, 3) + "  dBx=" + nf(dVx, 1, 3), col1, rowY);
+  text("Fx = " + nf(forceX, 1, 4) + " N", col2, rowY);
+
+  // By / dBy / Fy
+  rowY += rowH;
+  text("By=" + nf(sensorBy, 1, 3) + "  dBy=" + nf(dVy, 1, 3), col1, rowY);
+  text("Fy = " + nf(forceY, 1, 4) + " N", col2, rowY);
+
+  // Bz / dBz / Fz
+  rowY += rowH;
+  text("Bz=" + nf(sensorBz, 1, 3) + "  dBz=" + nf(dVz, 1, 3), col1, rowY);
+  text("Fz = " + nf(forceZ, 1, 4) + " N", col2, rowY);
+
+  // --- baseline reference ---
+  rowY += rowH + 6;
+  fill(90);
+  textSize(11);
+  text("Baseline  Bx=" + nf(baselineX,1,3)
+       + "  By=" + nf(baselineY,1,3)
+       + "  Bz=" + nf(baselineZ,1,3), col1, rowY);
   textSize(14);
 
-  // consume new-data flag; visualization modules reset it themselves
   newDataAvailable = false;
 
-  // --- TODO: call visualization drawing modules here ---
-  // drawSensitivityChart();
+  // --- interactive matrix overlay (on top of everything) ---
+  drawMatrixHUD();
+}
+
+// ============================================================
+// Keyboard input
+// ============================================================
+void keyPressed() {
+  handleMatrixKey(key);
 }
