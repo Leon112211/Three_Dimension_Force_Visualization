@@ -19,6 +19,7 @@ void setup() {
   initDecoupling();   // Decoupling.pde — build S and D matrices
   initForceView();    // ForceView.pde  — 3D arrows + bar chart
   initPressureGrid(); // PressureGrid.pde — Z-axis pressure surface
+  initCompass();      // TangentialCompass.pde — XY force compass
   initPlot();         // SensorPlot.pde  — real-time Bx/By/Bz waveform
   initBaseline();     // Baseline.pde   — begin 300-sample calibration
 }
@@ -107,6 +108,9 @@ void draw() {
 
   // --- Z-axis pressure surface ---
   drawPressureGrid();
+
+  // --- XY tangential force compass ---
+  drawCompass(forceX, forceY);
 
   // --- real-time sensor waveform ---
   drawPlot();

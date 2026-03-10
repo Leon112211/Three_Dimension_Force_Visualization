@@ -14,9 +14,9 @@
 // ============================================================
 
 // --- layout ---
-static final int SP_X = 30;
+static final int SP_X = 300;
 static final int SP_Y = 630;
-static final int SP_W = 1290;
+static final int SP_W = 1020;
 static final int SP_H = 280;
 
 // --- data ---
