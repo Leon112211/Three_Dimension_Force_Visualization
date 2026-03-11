@@ -12,6 +12,7 @@
 
 void setup() {
   size(1350, 940, P2D);
+  surface.setLocation((displayWidth - 1350) / 2, (displayHeight - 940) / 2);
   textSize(14);
   textAlign(LEFT, BASELINE);
 
@@ -135,53 +136,84 @@ void mouseDragged() {
 // ============================================================
 void drawNoConnection() {
   int cx = width / 2;
-  int cy = height / 2;
+  int cy = height / 2 - 30;
 
-  // dim pulsing ring
-  float pulse = 0.5 + 0.5 * sin(frameCount * 0.04);
-  int ringAlpha = (int) lerp(60, 160, pulse);
+  textAlign(CENTER, CENTER);
 
+  // --- 1. dot-grid background tint ---
+  noStroke();
+  int gridSpacingX = width / 9;
+  int gridSpacingY = height / 6;
+  for (int gx = gridSpacingX; gx < width; gx += gridSpacingX) {
+    for (int gy = gridSpacingY; gy < height; gy += gridSpacingY) {
+      fill(255, 60, 60, 18);
+      ellipse(gx, gy, 4, 4);
+    }
+  }
+
+  // --- 2. concentric pulse rings (4 rings, staggered phase) ---
+  int[] ringR = { 50, 75, 100, 125 };
+  noFill();
+  strokeWeight(1.2);
+  for (int i = 0; i < ringR.length; i++) {
+    float phase = frameCount * 0.05 + i * HALF_PI;
+    float alpha = map(sin(phase), -1, 1, 18, 100);
+    stroke(255, 80, 70, alpha);
+    ellipse(cx, cy, ringR[i] * 2, ringR[i] * 2);
+  }
+  noStroke();
+
+  // --- 3. disconnect icon: X in circle ---
   noFill();
   strokeWeight(2);
-  stroke(255, 80, 80, ringAlpha);
-  ellipse(cx, cy - 30, 90, 90);
-  stroke(255, 80, 80, ringAlpha / 2);
-  ellipse(cx, cy - 30, 120, 120);
-  noStroke();
-
-  // icon: cross inside circle
+  stroke(255, 110, 90);
+  ellipse(cx, cy, 56, 56);
   strokeWeight(3);
-  stroke(255, 80, 80);
-  float r = 22;
-  line(cx - r * 0.6, cy - 30 - r * 0.6, cx + r * 0.6, cy - 30 + r * 0.6);
-  line(cx + r * 0.6, cy - 30 - r * 0.6, cx - r * 0.6, cy - 30 + r * 0.6);
+  float d = 12;
+  line(cx - d, cy - d, cx + d, cy + d);
+  line(cx + d, cy - d, cx - d, cy + d);
   noStroke();
 
-  // main label
-  textAlign(CENTER, CENTER);
-  fill(255, 80, 80);
-  textSize(28);
-  text("No connection...", cx, cy + 30);
+  // --- 5. main title with shadow ---
+  textSize(32);
+  String ellipsis = "...".substring(0, (int)(frameCount / 15) % 4);
+  fill(120, 30, 20);
+  text("No Connection" + ellipsis, cx + 1, cy + 151);   // shadow
+  fill(255, 90, 80);
+  text("No Connection" + ellipsis, cx, cy + 150);
 
-  // subtitle
+  // --- 6. subtitle ---
   fill(160, 100, 100);
   textSize(13);
-  text("No serial device detected. Check cable and restart.", cx, cy + 68);
+  text("No serial device detected.  Check cable and restart sketch.", cx, cy + 190);
 
-  // available ports hint
+  // --- 7. port list box ---
   String[] ports = Serial.list();
   if (ports.length > 0) {
-    fill(120);
-    textSize(11);
-    String portList = "Available ports: ";
+    String portStr = "";
     for (int i = 0; i < ports.length; i++) {
-      portList += ports[i];
-      if (i < ports.length - 1) portList += "  |  ";
+      portStr += ports[i];
+      if (i < ports.length - 1) portStr += "  |  ";
     }
-    text(portList, cx, cy + 96);
+    float boxW = textWidth(portStr) + 40;
+    float boxH = 26;
+    float boxX = cx - boxW / 2;
+    float boxY = cy + 210;
+
+    fill(45);
+    strokeWeight(1);
+    stroke(90);
+    rect(boxX, boxY, boxW, boxH, 4);
+    noStroke();
+
+    fill(140);
+    textSize(11);
+    text(portStr, cx, boxY + boxH / 2);
   }
 
   // restore defaults
   textAlign(LEFT, BASELINE);
   textSize(14);
+  noStroke();
+  rectMode(CORNER);
 }
