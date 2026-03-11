@@ -31,8 +31,7 @@ void draw() {
 
   // --- serial not connected ---
   if (!isReceiverReady()) {
-    fill(255, 80, 80);
-    text("[ Serial port not connected ]  Check device and restart", 30, 40);
+    drawNoConnection();
     return;
   }
 
@@ -129,4 +128,60 @@ void keyPressed() {
 void mouseDragged() {
   handleFVDrag();
   handlePGDrag();
+}
+
+// ============================================================
+// drawNoConnection() — shown when serial port is unavailable
+// ============================================================
+void drawNoConnection() {
+  int cx = width / 2;
+  int cy = height / 2;
+
+  // dim pulsing ring
+  float pulse = 0.5 + 0.5 * sin(frameCount * 0.04);
+  int ringAlpha = (int) lerp(60, 160, pulse);
+
+  noFill();
+  strokeWeight(2);
+  stroke(255, 80, 80, ringAlpha);
+  ellipse(cx, cy - 30, 90, 90);
+  stroke(255, 80, 80, ringAlpha / 2);
+  ellipse(cx, cy - 30, 120, 120);
+  noStroke();
+
+  // icon: cross inside circle
+  strokeWeight(3);
+  stroke(255, 80, 80);
+  float r = 22;
+  line(cx - r * 0.6, cy - 30 - r * 0.6, cx + r * 0.6, cy - 30 + r * 0.6);
+  line(cx + r * 0.6, cy - 30 - r * 0.6, cx - r * 0.6, cy - 30 + r * 0.6);
+  noStroke();
+
+  // main label
+  textAlign(CENTER, CENTER);
+  fill(255, 80, 80);
+  textSize(28);
+  text("No connection...", cx, cy + 30);
+
+  // subtitle
+  fill(160, 100, 100);
+  textSize(13);
+  text("No serial device detected. Check cable and restart.", cx, cy + 68);
+
+  // available ports hint
+  String[] ports = Serial.list();
+  if (ports.length > 0) {
+    fill(120);
+    textSize(11);
+    String portList = "Available ports: ";
+    for (int i = 0; i < ports.length; i++) {
+      portList += ports[i];
+      if (i < ports.length - 1) portList += "  |  ";
+    }
+    text(portList, cx, cy + 96);
+  }
+
+  // restore defaults
+  textAlign(LEFT, BASELINE);
+  textSize(14);
 }
