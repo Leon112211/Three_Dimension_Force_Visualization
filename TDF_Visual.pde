@@ -60,7 +60,7 @@ void draw() {
   // --- header ---
   fill(180, 220, 255);
   text("Sensor: " + SENSOR_NAMES[activeSensor]
-       + "   |   [M] Matrix   [1/2/3] Sensor   [T] S/D", 30, 30);
+       + "   |   [M] Matrix   [1/2/3] Sensor   [T] S/D   [C] Recalibrate", 30, 30);
 
   // --- magnetic field readout ---
   int col1 = 30;
@@ -123,6 +123,15 @@ void draw() {
 // Input handlers
 // ============================================================
 void keyPressed() {
+  // [C] — recalibrate baseline
+  if (key == 'c' || key == 'C') {
+    if (isReceiverReady()) {
+      initBaseline();
+      println("[TDF] Baseline recalibration triggered by user.");
+    }
+    return;
+  }
+
   handleMatrixKey(key);
 }
 
