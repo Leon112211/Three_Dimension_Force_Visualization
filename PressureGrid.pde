@@ -43,7 +43,7 @@ void drawPressureGrid() {
   float halfGrid = GRID_SIZE / 2.0;
 
   // center displacement driven by Fz
-  float centerDisp = -forceZ * FZ_SCALE;   // negative Fz = push down
+  float centerDisp = forceZ * FZ_SCALE;    // positive Fz = push down
 
   // --- precompute vertex heights ---
   float[][] hts = new float[GRID_N + 1][GRID_N + 1];
