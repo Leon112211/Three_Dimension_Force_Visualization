@@ -32,29 +32,16 @@ float forceX = 0, forceY = 0, forceZ = 0;
 
 // ============================================================
 void initDecoupling() {
-  // ---------- H2 ----------
-  // S rows: Bx, By, Bz;  cols: Fx, Fy, Fz
-  S_ALL[0] = new float[][] {
-    {  1,  8,  6 },   // Bx
-    {  4,  2,  9 },   // By
-    {  7,  5,  3 }    // Bz
-  };
+  // --- Step 1: run Python to convert xlsx → csv ---
+  runDataConversion();
 
-  // ---------- H4 ----------
-  S_ALL[1] = new float[][] {
-    {  12,  89,  67 },
-    {  45,  23,  90 },
-    {  78,  56,  34 }
-  };
+  // --- Step 2: load S matrices from CSV ---
+  boolean loaded = loadSensitivityCSV(sketchPath("sensitivity_data.csv"));
+  if (!loaded) {
+    println("[Decoupling] WARNING: CSV load failed, using zero matrices!");
+  }
 
-  // ---------- H6 ----------
-  S_ALL[2] = new float[][] {
-    {  11,  88,  66 },
-    {  44,  22,  99 },
-    {  77,  55,  33 }
-  };
-
-  // compute D = S^-1 for each sensor
+  // --- Step 3: compute D = S^-1 for each sensor ---
   for (int s = 0; s < NUM_SENSORS; s++) {
     D_ALL[s] = invert3x3(S_ALL[s]);
     if (D_ALL[s] == null) {
@@ -67,6 +54,99 @@ void initDecoupling() {
   }
 
   selectSensor(0);
+}
+
+// ============================================================
+// Run convert_data.py to refresh sensitivity_data.csv from xlsx
+// ============================================================
+void runDataConversion() {
+  String scriptPath = sketchPath("convert_data.py");
+  File scriptFile = new File(scriptPath);
+  if (!scriptFile.exists()) {
+    println("[Decoupling] convert_data.py not found, skipping conversion.");
+    return;
+  }
+
+  // Try common Python paths on Windows
+  String[] pythonCandidates = {
+    "python",
+    "python3",
+    "C:\\Program Files\\Python312\\python.exe",
+    "C:\\Program Files\\Python311\\python.exe",
+    "C:\\Program Files\\Python310\\python.exe"
+  };
+
+  for (String py : pythonCandidates) {
+    try {
+      ProcessBuilder pb = new ProcessBuilder(py, scriptPath);
+      pb.directory(new File(sketchPath("")));
+      pb.redirectErrorStream(true);
+      Process proc = pb.start();
+
+      // read output
+      java.io.BufferedReader br = new java.io.BufferedReader(
+        new java.io.InputStreamReader(proc.getInputStream()));
+      String line;
+      while ((line = br.readLine()) != null) {
+        println("[convert_data] " + line);
+      }
+
+      int exitCode = proc.waitFor();
+      if (exitCode == 0) {
+        println("[Decoupling] Data conversion OK (using " + py + ")");
+        return;
+      }
+    } catch (Exception e) {
+      // this python path didn't work, try next
+    }
+  }
+
+  println("[Decoupling] WARNING: Could not run Python conversion. Using existing CSV if available.");
+}
+
+// ============================================================
+// Parse sensitivity_data.csv → S_ALL[][][]
+// Format:  # SensorName  then 3 rows of  "v,v,v"
+// ============================================================
+boolean loadSensitivityCSV(String path) {
+  File f = new File(path);
+  if (!f.exists()) {
+    println("[Decoupling] " + path + " not found.");
+    return false;
+  }
+
+  String[] lines = loadStrings(path);
+  if (lines == null) return false;
+
+  int sensorIdx = -1;
+  int rowIdx = 0;
+
+  for (String raw : lines) {
+    String line = raw.trim();
+    if (line.length() == 0) continue;
+
+    if (line.startsWith("#")) {
+      // header line like "# H2"
+      sensorIdx++;
+      rowIdx = 0;
+      if (sensorIdx >= NUM_SENSORS) break;
+      continue;
+    }
+
+    if (sensorIdx < 0 || sensorIdx >= NUM_SENSORS) continue;
+    if (rowIdx >= 3) continue;
+
+    String[] parts = split(line, ',');
+    if (parts.length >= 3) {
+      S_ALL[sensorIdx][rowIdx][0] = float(parts[0].trim());
+      S_ALL[sensorIdx][rowIdx][1] = float(parts[1].trim());
+      S_ALL[sensorIdx][rowIdx][2] = float(parts[2].trim());
+    }
+    rowIdx++;
+  }
+
+  println("[Decoupling] Loaded sensitivity data for " + (sensorIdx + 1) + " sensor(s).");
+  return sensorIdx >= 0;
 }
 
 // ============================================================
