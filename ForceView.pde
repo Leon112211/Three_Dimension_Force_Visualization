@@ -30,6 +30,10 @@ static final int FV_BAR_H = 380;
 float _fvRotX = -0.4;   // initial tilt (radians)
 float _fvRotY =  0.6;   // initial pan
 
+// --- fixed scale: force (N) that maps to full axis length ---
+// Arrows are clamped at axis boundary. Adjust to your sensor's range.
+static final float FV_FORCE_REF = 20.0;   // N → 120 px (full axis)
+
 // --- axis colors (reuse project palette) ---
 color FV_COL_X = 0xFF508CFF;   // (80, 140, 255)
 color FV_COL_Y = 0xFF64DC64;   // (100, 220, 100)
@@ -54,9 +58,8 @@ void drawForceView() {
 void draw3DPanel() {
   float axisLen = 120;   // half-axis length in 3D units
 
-  // --- auto-scale: map max force to ~100 px arrow ---
-  float maxF = max(max(abs(forceX), abs(forceY)), max(abs(forceZ), 0.001));
-  float scale = 100.0 / maxF;
+  // --- fixed scale: FV_FORCE_REF N → axisLen px, clamped ---
+  float scale = axisLen / FV_FORCE_REF;
 
   _pg3d.beginDraw();
   _pg3d.background(25, 25, 35);
@@ -86,21 +89,27 @@ void draw3DPanel() {
   _pg3d.fill(FV_COL_Z);
   _pg3d.text("+Z", 4, 4, axisLen + 6);
 
-  // --- force arrows on each axis ---
+  // --- force arrows on each axis (clamped to axis length) ---
   // X arrow (along X axis)
-  float arrowX = forceX * scale;
+  float arrowX = constrain(forceX * scale, -axisLen, axisLen);
   drawArrow3D(_pg3d, 0, 0, 0, arrowX, 0, 0, FV_COL_X, 2.5);
 
   // Y arrow (up = positive, so negate for Processing coords)
-  float arrowY = forceY * scale;
+  float arrowY = constrain(forceY * scale, -axisLen, axisLen);
   drawArrow3D(_pg3d, 0, 0, 0, 0, -arrowY, 0, FV_COL_Y, 2.5);
 
   // Z arrow (into screen = positive Z)
-  float arrowZ = forceZ * scale;
+  float arrowZ = constrain(forceZ * scale, -axisLen, axisLen);
   drawArrow3D(_pg3d, 0, 0, 0, 0, 0, arrowZ, FV_COL_Z, 2.5);
 
-  // --- resultant vector ---
-  drawArrow3D(_pg3d, 0, 0, 0, arrowX, -arrowY, arrowZ, FV_COL_R, 3.0);
+  // --- resultant vector (clamped to axis sphere) ---
+  float rLen = sqrt(arrowX*arrowX + arrowY*arrowY + arrowZ*arrowZ);
+  float rX = arrowX, rY = -arrowY, rZ = arrowZ;
+  if (rLen > axisLen) {
+    float rScale = axisLen / rLen;
+    rX *= rScale;  rY *= rScale;  rZ *= rScale;
+  }
+  drawArrow3D(_pg3d, 0, 0, 0, rX, rY, rZ, FV_COL_R, 3.0);
 
   _pg3d.endDraw();
 
@@ -192,9 +201,8 @@ void drawBarChart() {
   String[] names = { "Fx", "Fy", "Fz", "|F|" };
   color[] cols   = { FV_COL_X, FV_COL_Y, FV_COL_Z, FV_COL_R };
 
-  // auto-scale
-  float maxVal = 0.001;
-  for (float v : vals) maxVal = max(maxVal, abs(v));
+  // fixed scale — same reference as 3D arrows
+  float maxVal = FV_FORCE_REF;
 
   int barCount = 4;
   int barW     = 50;
