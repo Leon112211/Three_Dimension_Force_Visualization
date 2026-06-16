@@ -182,10 +182,15 @@ color pgHeightColor(float h, float refD) {
 // Mouse drag — rotate pressure grid view
 // ============================================================
 void handlePGDrag() {
-  if (mouseX >= PG_GRID_X && mouseX <= PG_GRID_X + PG_GRID_W &&
-      mouseY >= PG_GRID_Y && mouseY <= PG_GRID_Y + PG_GRID_H) {
-    float dx = mouseX - pmouseX;
-    float dy = mouseY - pmouseY;
+  float mx = uiMouseX();
+  float my = uiMouseY();
+  float pmx = uiPMouseX();
+  float pmy = uiPMouseY();
+
+  if (mx >= PG_GRID_X && mx <= PG_GRID_X + PG_GRID_W &&
+      my >= PG_GRID_Y && my <= PG_GRID_Y + PG_GRID_H) {
+    float dx = mx - pmx;
+    float dy = my - pmy;
     _pgRotY += dx * 0.01;
     _pgRotX += dy * 0.01;
     _pgRotX = constrain(_pgRotX, -HALF_PI + 0.1, HALF_PI - 0.1);

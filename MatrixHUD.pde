@@ -21,7 +21,7 @@ void drawMatrixHUD() {
 
   int panelW = 440;
   int panelH = 260;
-  int px = width - panelW - 20;
+  int px = DESIGN_W - panelW - 20;
   int py = 20;
 
   // --- background ---

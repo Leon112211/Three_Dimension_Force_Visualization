@@ -280,11 +280,16 @@ void drawBarChart() {
 // Call from mouseDragged() in TDF_Visual
 // ============================================================
 void handleFVDrag() {
+  float mx = uiMouseX();
+  float my = uiMouseY();
+  float pmx = uiPMouseX();
+  float pmy = uiPMouseY();
+
   // only rotate if mouse is within the 3D panel area
-  if (mouseX >= FV_3D_X && mouseX <= FV_3D_X + PG_W &&
-      mouseY >= FV_3D_Y && mouseY <= FV_3D_Y + PG_H) {
-    float dx = mouseX - pmouseX;
-    float dy = mouseY - pmouseY;
+  if (mx >= FV_3D_X && mx <= FV_3D_X + PG_W &&
+      my >= FV_3D_Y && my <= FV_3D_Y + PG_H) {
+    float dx = mx - pmx;
+    float dy = my - pmy;
     _fvRotY += dx * 0.01;
     _fvRotX += dy * 0.01;
     // clamp vertical rotation to avoid flipping

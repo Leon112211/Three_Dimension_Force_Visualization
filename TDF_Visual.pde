@@ -10,9 +10,38 @@
 //   [1/2/3] Select sensor H2 / H4 / H6
 // ============================================================
 
+static final int DESIGN_W = 1350;
+static final int DESIGN_H = 940;
+static final float STARTUP_UI_SCALE = 0.78;
+static final float START_SCREEN_W = 0.82;
+static final float START_SCREEN_H = 0.82;
+static final float MIN_STARTUP_SCALE = 0.45;
+static final float MAX_UI_SCALE = 1.25;
+
+float _uiScale = 1.0;
+float _uiOffsetX = 0;
+float _uiOffsetY = 0;
+
+float _lastDVx = 0;
+float _lastDVy = 0;
+float _lastDVz = 0;
+boolean _warnedInvalidComputation = false;
+
+void settings() {
+  float scaleW = (displayWidth * START_SCREEN_W) / (float) DESIGN_W;
+  float scaleH = (displayHeight * START_SCREEN_H) / (float) DESIGN_H;
+  float fitScale = min(scaleW, scaleH);
+  float startupScale = min(STARTUP_UI_SCALE, fitScale);
+  if (fitScale >= MIN_STARTUP_SCALE) {
+    startupScale = max(startupScale, MIN_STARTUP_SCALE);
+  }
+  startupScale = min(startupScale, MAX_UI_SCALE);
+  size(round(DESIGN_W * startupScale), round(DESIGN_H * startupScale), P2D);
+}
+
 void setup() {
-  size(1350, 940, P2D);
-  surface.setLocation((displayWidth - 1350) / 2, (displayHeight - 940) / 2);
+  surface.setResizable(true);
+  centerWindowOnScreen();
   textSize(14);
   textAlign(LEFT, BASELINE);
 
@@ -27,12 +56,17 @@ void setup() {
 
 void draw() {
   background(30);
+  updateUILayout();
+  pushMatrix();
+  translate(_uiOffsetX, _uiOffsetY);
+  scale(_uiScale);
 
   updateReceiver();
 
   // --- serial not connected ---
   if (!isReceiverReady()) {
     drawNoConnection();
+    popMatrix();
     return;
   }
 
@@ -48,14 +82,27 @@ void draw() {
   if (!isBaselineDone()) {
     drawBaselineHUD();
     newDataAvailable = false;
+    popMatrix();
     return;
   }
 
   // --- compute decoupled force ---
-  float dVx = sensorBx - baselineX;
-  float dVy = sensorBy - baselineY;
-  float dVz = sensorBz - baselineZ;
-  computeForce(dVx, dVy, dVz);
+  boolean canComputeForce = isCurrentSensorFrameFinite()
+                         && areFiniteValues(baselineX, baselineY, baselineZ);
+  if (canComputeForce) {
+    _lastDVx = sensorBx - baselineX;
+    _lastDVy = sensorBy - baselineY;
+    _lastDVz = sensorBz - baselineZ;
+    computeForce(_lastDVx, _lastDVy, _lastDVz);
+    _warnedInvalidComputation = false;
+  } else if (!_warnedInvalidComputation) {
+    println("[TDF] Invalid serial frame skipped; keeping last valid force display.");
+    _warnedInvalidComputation = true;
+  }
+
+  float dVx = _lastDVx;
+  float dVy = _lastDVy;
+  float dVz = _lastDVz;
 
   // --- header ---
   fill(180, 220, 255);
@@ -99,6 +146,11 @@ void draw() {
   text("Baseline  Bx=" + nf(baselineX,1,3)
        + "  By=" + nf(baselineY,1,3)
        + "  Bz=" + nf(baselineZ,1,3), col1, rowY);
+  if (receiverBadFrameCount() > 0) {
+    rowY += rowH;
+    fill(255, 160, 80);
+    text("Skipped invalid serial frames: " + receiverBadFrameCount(), col1, rowY);
+  }
   textSize(14);
 
   newDataAvailable = false;
@@ -117,6 +169,8 @@ void draw() {
 
   // --- interactive matrix overlay (on top of everything) ---
   drawMatrixHUD();
+
+  popMatrix();
 }
 
 // ============================================================
@@ -136,25 +190,54 @@ void keyPressed() {
 }
 
 void mouseDragged() {
+  updateUILayout();
   handleFVDrag();
   handlePGDrag();
+}
+
+void updateUILayout() {
+  _uiScale = min(width / (float) DESIGN_W, height / (float) DESIGN_H);
+  _uiOffsetX = (width - DESIGN_W * _uiScale) * 0.5;
+  _uiOffsetY = (height - DESIGN_H * _uiScale) * 0.5;
+}
+
+void centerWindowOnScreen() {
+  int x = max(0, (displayWidth - width) / 2);
+  int y = max(0, (displayHeight - height) / 2);
+  surface.setLocation(x, y);
+}
+
+float uiMouseX() {
+  return (mouseX - _uiOffsetX) / _uiScale;
+}
+
+float uiMouseY() {
+  return (mouseY - _uiOffsetY) / _uiScale;
+}
+
+float uiPMouseX() {
+  return (pmouseX - _uiOffsetX) / _uiScale;
+}
+
+float uiPMouseY() {
+  return (pmouseY - _uiOffsetY) / _uiScale;
 }
 
 // ============================================================
 // drawNoConnection() — shown when serial port is unavailable
 // ============================================================
 void drawNoConnection() {
-  int cx = width / 2;
-  int cy = height / 2 - 30;
+  int cx = DESIGN_W / 2;
+  int cy = DESIGN_H / 2 - 30;
 
   textAlign(CENTER, CENTER);
 
   // --- 1. dot-grid background tint ---
   noStroke();
-  int gridSpacingX = width / 9;
-  int gridSpacingY = height / 6;
-  for (int gx = gridSpacingX; gx < width; gx += gridSpacingX) {
-    for (int gy = gridSpacingY; gy < height; gy += gridSpacingY) {
+  int gridSpacingX = DESIGN_W / 9;
+  int gridSpacingY = DESIGN_H / 6;
+  for (int gx = gridSpacingX; gx < DESIGN_W; gx += gridSpacingX) {
+    for (int gy = gridSpacingY; gy < DESIGN_H; gy += gridSpacingY) {
       fill(255, 60, 60, 18);
       ellipse(gx, gy, 4, 4);
     }
