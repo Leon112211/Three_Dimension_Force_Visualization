@@ -3,7 +3,7 @@
 // Collects valid Bx/By/Bz samples and computes the zero-force baseline.
 // ============================================================
 
-static final int BASELINE_SAMPLES = 300;
+static final int BASELINE_SAMPLES = 100;
 
 static final int BS_IDLE = 0;
 static final int BS_SAMPLING = 1;
@@ -78,24 +78,15 @@ void drawBaselineHUD() {
   int px = (DESIGN_W - panelW) / 2;
   int py = (DESIGN_H - panelH) / 2;
 
-  fill(20, 20, 30, 220);
-  noStroke();
-  rect(px, py, panelW, panelH, 10);
-
-  stroke(100, 160, 255, 160);
-  strokeWeight(1.5);
-  noFill();
-  rect(px, py, panelW, panelH, 10);
-  strokeWeight(1);
-  noStroke();
+  drawPanelBase(px, py, panelW, panelH, "");
 
   textAlign(CENTER, TOP);
-  fill(180, 220, 255);
-  textSize(15);
+  fill(UI_TEXT);
+  useUIFont(15);
   text("Baseline Calibration - hold sensor steady", px + panelW / 2, py + 16);
 
-  fill(160);
-  textSize(12);
+  fill(UI_MUTED);
+  useUIFont(12);
   text(_bsCount + " / " + BASELINE_SAMPLES + " valid samples", px + panelW / 2, py + 38);
 
   int barX = px + 50;
@@ -105,7 +96,7 @@ void drawBaselineHUD() {
   int barStartY = py + 68;
 
   String[] labels = { "Bx", "By", "Bz" };
-  color[] colors = { color(80, 140, 255), color(100, 220, 100), color(255, 160, 60) };
+  color[] colors = { UI_X, UI_Y, UI_Z };
 
   float progress = (float) _bsCount / BASELINE_SAMPLES;
 
@@ -117,7 +108,7 @@ void drawBaselineHUD() {
     textAlign(RIGHT, CENTER);
     text(labels[i], barX - 8, barY + barH / 2);
 
-    fill(50, 50, 70);
+    fill(UI_PANEL_HI);
     noStroke();
     rect(barX, barY, barW, barH, 4);
 
@@ -126,20 +117,20 @@ void drawBaselineHUD() {
       rect(barX, barY, barW * progress, barH, 4);
     }
 
-    fill(220);
-    textSize(11);
+    fill(UI_TEXT);
+    useMonoFont(11);
     textAlign(LEFT, CENTER);
     text(int(progress * 100) + "%", barX + barW + 6, barY + barH / 2);
   }
 
   if (_bsSkippedFrames > 0) {
-    fill(255, 160, 80);
-    textSize(11);
+    fill(UI_WARN);
+    useUIFont(11);
     textAlign(CENTER, TOP);
     text("Skipped invalid samples: " + _bsSkippedFrames, px + panelW / 2, py + panelH - 28);
   }
 
   textAlign(LEFT, BASELINE);
-  textSize(14);
+  useUIFont(14);
   noStroke();
 }

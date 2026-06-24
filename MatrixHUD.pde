@@ -1,165 +1,111 @@
 // ============================================================
 // MatrixHUD.pde
-// Interactive overlay for viewing sensitivity (S) and
-// decoupling (D) matrices of each sensor.
-//
-// Toggle:  press 'M' to show / hide the matrix panel
-// Switch:  press '1' / '2' / '3' to select H2 / H4 / H6
-// Tab:     press 'T' to toggle between S and D view
-//
-// Public API (called from TDF_Visual):
-//   drawMatrixHUD()     — render if visible
-//   handleMatrixKey(key) — forward keyPressed events
+// Compact overlay for sensitivity (S) and decoupling (D) matrices.
 // ============================================================
 
-boolean _matrixVisible = false;
-boolean _showDecoupling = false;   // false = S, true = D
+boolean _showDecoupling = false;
 
-// ============================================================
 void drawMatrixHUD() {
-  if (!_matrixVisible) return;
+  int panelW = 450;
+  int panelH = 160;
+  int px = DESIGN_W - panelW - 30;
+  int py = 30;
 
-  int panelW = 440;
-  int panelH = 260;
-  int px = DESIGN_W - panelW - 20;
-  int py = 20;
-
-  // --- background ---
-  fill(15, 15, 25, 230);
   noStroke();
+  fill(0, 0, 0, 80);
+  rect(px + 2, py + 3, panelW, panelH, 8);
+  fill(UI_PANEL, 238);
   rect(px, py, panelW, panelH, 8);
 
-  stroke(80, 130, 220, 140);
+  stroke(UI_BORDER_ACTIVE, 180);
   strokeWeight(1);
   noFill();
-  rect(px, py, panelW, panelH, 8);
+  rect(px + 0.5, py + 0.5, panelW - 1, panelH - 1, 8);
   noStroke();
 
-  // --- title bar ---
-  String matType  = _showDecoupling ? "D  (N/uT)" : "S  (uT/N)";
-  String sensorName = SENSOR_NAMES[activeSensor];
-
+  String matType = _showDecoupling ? "D  (N/uT)" : "S  (uT/N)";
   textAlign(CENTER, TOP);
-  fill(180, 220, 255);
-  textSize(14);
-  text(sensorName + "  —  " + matType, px + panelW/2, py + 12);
+  fill(UI_TEXT);
+  useUIFont(13);
+  text(SENSOR_NAMES[activeSensor] + "   " + matType, px + panelW / 2, py + 9);
 
-  // --- sensor tabs ---
   int tabW = 52;
   int tabH = 22;
-  int tabY = py + 36;
+  int tabY = py + 32;
   int tabStartX = px + (panelW - NUM_SENSORS * (tabW + 8)) / 2;
 
   for (int i = 0; i < NUM_SENSORS; i++) {
     int tx = tabStartX + i * (tabW + 8);
-    if (i == activeSensor) {
-      fill(80, 140, 255);
-    } else {
-      fill(50, 55, 70);
-    }
-    noStroke();
+    fill(i == activeSensor ? UI_BORDER_ACTIVE : UI_PANEL_HI);
     rect(tx, tabY, tabW, tabH, 4);
 
-    fill(i == activeSensor ? 255 : 160);
-    textSize(12);
+    fill(i == activeSensor ? UI_TEXT : UI_MUTED);
+    useUIFont(12);
     textAlign(CENTER, CENTER);
-    text(SENSOR_NAMES[i], tx + tabW/2, tabY + tabH/2);
+    text(SENSOR_NAMES[i], tx + tabW / 2, tabY + tabH / 2);
   }
 
-  // --- S / D toggle ---
   int togW = 56;
   int togH = 22;
   int togX = px + panelW - togW - 16;
   int togY = tabY;
-
-  fill(_showDecoupling ? color(220, 140, 60) : color(80, 180, 120));
-  noStroke();
+  fill(_showDecoupling ? color(128, 83, 43) : color(37, 100, 70));
   rect(togX, togY, togW, togH, 4);
-
-  fill(255);
-  textSize(11);
+  fill(UI_TEXT);
+  useUIFont(11);
   textAlign(CENTER, CENTER);
-  text(_showDecoupling ? "D" : "S", togX + togW/2, togY + togH/2);
+  text(_showDecoupling ? "D" : "S", togX + togW / 2, togY + togH / 2);
 
-  // --- matrix grid ---
   float[][] mat = _showDecoupling ? D_ALL[activeSensor] : S_ALL[activeSensor];
   int gridX = px + 36;
-  int gridY = tabY + tabH + 20;
-  int cellW = 110;
-  int cellH = 30;
+  int gridY = tabY + tabH + 17;
+  int cellW = 104;
+  int cellH = 24;
 
   String[] axisLabels = { "Bx", "By", "Bz" };
   String[] forceLabels = { "Fx", "Fy", "Fz" };
   if (_showDecoupling) {
-    axisLabels  = new String[] { "Fx", "Fy", "Fz" };
+    axisLabels = new String[] { "Fx", "Fy", "Fz" };
     forceLabels = new String[] { "Bx", "By", "Bz" };
   }
 
-  // column headers
-  textSize(11);
-  fill(140, 180, 220);
+  useUIFont(10);
+  fill(UI_MUTED);
   textAlign(CENTER, CENTER);
   for (int c = 0; c < 3; c++) {
-    text(forceLabels[c], gridX + 40 + c * cellW + cellW/2, gridY - 10);
+    text(forceLabels[c], gridX + 40 + c * cellW + cellW / 2, gridY - 9);
   }
 
-  // rows
   for (int r = 0; r < 3; r++) {
     int ry = gridY + r * cellH;
-
-    // row label
-    fill(140, 180, 220);
-    textSize(11);
+    fill(UI_MUTED);
+    useUIFont(10);
     textAlign(RIGHT, CENTER);
-    text(axisLabels[r], gridX + 30, ry + cellH/2);
+    text(axisLabels[r], gridX + 30, ry + cellH / 2);
 
     for (int c = 0; c < 3; c++) {
       int cx = gridX + 40 + c * cellW;
       float val = mat[r][c];
 
-      // cell background
-      if (r == c) {
-        fill(40, 60, 90, 180);  // diagonal highlight
-      } else {
-        fill(30, 35, 50, 150);
-      }
-      noStroke();
+      fill(r == c ? color(38, 55, 80, 210) : color(23, 28, 40, 210));
       rect(cx, ry, cellW - 4, cellH - 4, 3);
 
-      // value text — color negative values differently
-      if (val < 0) {
-        fill(255, 120, 100);
-      } else {
-        fill(200, 240, 200);
-      }
-      textSize(13);
+      fill(val < 0 ? UI_DANGER : color(184, 226, 196));
+      useMonoFont(12);
       textAlign(CENTER, CENTER);
       if (_showDecoupling) {
-        text(nf(val, 1, 6), cx + (cellW-4)/2, ry + (cellH-4)/2);
+        text(nf(val, 1, 5), cx + (cellW - 4) / 2, ry + (cellH - 4) / 2);
       } else {
-        text(nf(val, 1, 2), cx + (cellW-4)/2, ry + (cellH-4)/2);
+        text(nf(val, 1, 2), cx + (cellW - 4) / 2, ry + (cellH - 4) / 2);
       }
     }
   }
 
-  // --- help hint ---
-  fill(100);
-  textSize(10);
-  textAlign(CENTER, TOP);
-  text("[M] hide    [1/2/3] sensor    [T] toggle S/D", px + panelW/2, py + panelH - 20);
-
-  // reset text state
   textAlign(LEFT, BASELINE);
-  textSize(14);
+  useUIFont(14);
 }
 
-// ============================================================
-// handleMatrixKey() — call from keyPressed()
-// ============================================================
 void handleMatrixKey(char k) {
-  if (k == 'm' || k == 'M') {
-    _matrixVisible = !_matrixVisible;
-  }
   if (k == 't' || k == 'T') {
     _showDecoupling = !_showDecoupling;
   }

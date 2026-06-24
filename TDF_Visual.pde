@@ -5,7 +5,6 @@
 //
 // Flow: Serial CSV → Baseline calibration → Decoupling F=D*dV → HUD
 // Keyboard shortcuts:
-//   [M]   Toggle matrix panel
 //   [T]   Toggle S / D view
 //   [1/2/3] Select sensor H2 / H4 / H6
 // ============================================================
@@ -42,7 +41,8 @@ void settings() {
 void setup() {
   surface.setResizable(true);
   centerWindowOnScreen();
-  textSize(14);
+  initTheme();
+  useUIFont(14);
   textAlign(LEFT, BASELINE);
 
   initReceiver();     // SensorReceiver.pde
@@ -55,11 +55,12 @@ void setup() {
 }
 
 void draw() {
-  background(30);
+  background(UI_BG);
   updateUILayout();
   pushMatrix();
   translate(_uiOffsetX, _uiOffsetY);
   scale(_uiScale);
+  drawAppBackdrop();
 
   updateReceiver();
 
@@ -104,54 +105,7 @@ void draw() {
   float dVy = _lastDVy;
   float dVz = _lastDVz;
 
-  // --- header ---
-  fill(180, 220, 255);
-  text("Sensor: " + SENSOR_NAMES[activeSensor]
-       + "   |   [M] Matrix   [1/2/3] Sensor   [T] S/D   [C] Recalibrate", 30, 30);
-
-  // --- magnetic field readout ---
-  int col1 = 30;
-  int col2 = 280;
-  int rowY = 60;
-  int rowH = 26;
-
-  fill(100, 160, 220);
-  textSize(12);
-  text("Magnetic field (uT)", col1, rowY);
-  text("Decoupled force (N)", col2, rowY);
-
-  textSize(14);
-  color dataColor = newDataAvailable ? color(100, 255, 150) : color(160);
-  fill(dataColor);
-
-  // Bx / dBx / Fx
-  rowY += rowH;
-  text("Bx=" + nf(sensorBx, 1, 3) + "  dBx=" + nf(dVx, 1, 3), col1, rowY);
-  text("Fx = " + nf(forceX, 1, 4) + " N", col2, rowY);
-
-  // By / dBy / Fy
-  rowY += rowH;
-  text("By=" + nf(sensorBy, 1, 3) + "  dBy=" + nf(dVy, 1, 3), col1, rowY);
-  text("Fy = " + nf(forceY, 1, 4) + " N", col2, rowY);
-
-  // Bz / dBz / Fz
-  rowY += rowH;
-  text("Bz=" + nf(sensorBz, 1, 3) + "  dBz=" + nf(dVz, 1, 3), col1, rowY);
-  text("Fz = " + nf(forceZ, 1, 4) + " N", col2, rowY);
-
-  // --- baseline reference ---
-  rowY += rowH + 6;
-  fill(90);
-  textSize(11);
-  text("Baseline  Bx=" + nf(baselineX,1,3)
-       + "  By=" + nf(baselineY,1,3)
-       + "  Bz=" + nf(baselineZ,1,3), col1, rowY);
-  if (receiverBadFrameCount() > 0) {
-    rowY += rowH;
-    fill(255, 160, 80);
-    text("Skipped invalid serial frames: " + receiverBadFrameCount(), col1, rowY);
-  }
-  textSize(14);
+  drawTopHUD(dVx, dVy, dVz);
 
   newDataAvailable = false;
 
@@ -167,10 +121,69 @@ void draw() {
   // --- real-time sensor waveform ---
   drawPlot();
 
-  // --- interactive matrix overlay (on top of everything) ---
+  // --- always-visible matrix overlay (on top of everything) ---
   drawMatrixHUD();
 
   popMatrix();
+}
+
+void drawTopHUD(float dVx, float dVy, float dVz) {
+  int x = 30;
+  int y = 30;
+  int w = 820;
+  int h = 160;
+  drawPanelBase(x, y, w, h, "Sensor State");
+
+  useUIFont(18);
+  textAlign(LEFT, TOP);
+  fill(UI_TEXT);
+  text("TDF Visual", x + 16, y + 30);
+
+  drawBadge(x + 128, y + 29, SENSOR_NAMES[activeSensor], UI_PANEL_HI, UI_TEXT);
+  drawBadge(x + 176, y + 29, newDataAvailable ? "LIVE" : "HOLD",
+            newDataAvailable ? color(36, 92, 62) : color(64, 68, 78),
+            newDataAvailable ? UI_GOOD : UI_MUTED);
+  if (receiverBadFrameCount() > 0) {
+    drawBadge(x + 232, y + 29, "BAD " + receiverBadFrameCount(),
+              color(78, 51, 28), UI_WARN);
+  }
+
+  int magX = x + 18;
+  int forceX0 = x + 344;
+  int baseY = y + 68;
+  int rowH = 22;
+
+  useUIFont(11);
+  textAlign(LEFT, TOP);
+  fill(UI_MUTED);
+  text("Magnetic delta (uT)", magX, baseY - 22);
+  text("Decoupled force (N)", forceX0, baseY - 22);
+
+  drawReadoutRow(magX, baseY, "dBx", dVx, UI_X);
+  drawReadoutRow(magX, baseY + rowH, "dBy", dVy, UI_Y);
+  drawReadoutRow(magX, baseY + rowH * 2, "dBz", dVz, UI_Z);
+
+  drawReadoutRow(forceX0, baseY, "Fx", forceX, UI_X);
+  drawReadoutRow(forceX0, baseY + rowH, "Fy", forceY, UI_Y);
+  drawReadoutRow(forceX0, baseY + rowH * 2, "Fz", forceZ, UI_Z);
+
+  useMonoFont(10);
+  fill(UI_DIM);
+  textAlign(LEFT, TOP);
+  text("Baseline  Bx=" + nf(baselineX, 1, 2)
+       + "  By=" + nf(baselineY, 1, 2)
+       + "  Bz=" + nf(baselineZ, 1, 2), x + 560, baseY + rowH);
+
+  useUIFont(14);
+}
+
+void drawReadoutRow(int x, int y, String label, float value, color c) {
+  useMonoFont(14);
+  textAlign(LEFT, TOP);
+  fill(c);
+  text(label, x, y);
+  fill(UI_TEXT);
+  text(nf(value, 1, 4), x + 44, y);
 }
 
 // ============================================================

@@ -3,9 +3,9 @@
 // Real-time scrolling waveform of Bx / By / Bz sensor readings.
 // ============================================================
 
-static final int SP_X = 300;
+static final int SP_X = 450;
 static final int SP_Y = 630;
-static final int SP_W = 1020;
+static final int SP_W = 870;
 static final int SP_H = 280;
 
 static final int PLOT_HISTORY = 300;
@@ -14,9 +14,9 @@ float[] _spBx, _spBy, _spBz;
 int _spHead = 0;
 int _spCount = 0;
 
-color SP_COL_BX = 0xFF508CFF;
-color SP_COL_BY = 0xFF64DC64;
-color SP_COL_BZ = 0xFFFFA03C;
+color SP_COL_BX = 0xFF5A92FF;
+color SP_COL_BY = 0xFF66E07D;
+color SP_COL_BZ = 0xFFFFA23D;
 
 void initPlot() {
   _spBx = new float[PLOT_HISTORY];
@@ -43,9 +43,7 @@ void updatePlot() {
 void drawPlot() {
   if (_spCount < 2) return;
 
-  fill(20, 22, 30);
-  noStroke();
-  rect(SP_X, SP_Y, SP_W, SP_H, 6);
+  drawPanelBase(SP_X, SP_Y, SP_W, SP_H, "Magnetic Delta Waveform");
 
   float yMin = Float.MAX_VALUE;
   float yMax = -Float.MAX_VALUE;
@@ -55,13 +53,18 @@ void drawPlot() {
     int idx = ringIndex(i);
     if (!areFiniteValues(_spBx[idx], _spBy[idx], _spBz[idx])) continue;
 
-    yMin = min(yMin, min(_spBx[idx], min(_spBy[idx], _spBz[idx])));
-    yMax = max(yMax, max(_spBx[idx], max(_spBy[idx], _spBz[idx])));
+    float bx = plotDelta(_spBx[idx], baselineX);
+    float by = plotDelta(_spBy[idx], baselineY);
+    float bz = plotDelta(_spBz[idx], baselineZ);
+    yMin = min(yMin, min(bx, min(by, bz)));
+    yMax = max(yMax, max(bx, max(by, bz)));
     finiteCount++;
   }
 
   if (finiteCount < 2) return;
 
+  yMin = min(yMin, 0);
+  yMax = max(yMax, 0);
   float yRange = yMax - yMin;
   if (yRange < 0.1) yRange = 0.1;
   float padding = yRange * 0.1;
@@ -74,12 +77,12 @@ void drawPlot() {
   int cBottom = SP_Y + SP_H - 24;
   int cH = cBottom - cTop;
 
-  stroke(50, 52, 65);
+  stroke(UI_GRID);
   strokeWeight(0.5);
   int numTicks = 5;
-  textSize(9);
+  useMonoFont(9);
   textAlign(RIGHT, CENTER);
-  fill(100);
+  fill(UI_DIM);
   for (int t = 0; t <= numTicks; t++) {
     float frac = (float) t / numTicks;
     int ly = cBottom - (int)(frac * cH);
@@ -88,64 +91,61 @@ void drawPlot() {
     text(nf(val, 1, 1), cLeft - 4, ly);
   }
 
-  if (isBaselineDone()) {
-    float[] baselines = { baselineX, baselineY, baselineZ };
-    color[] blColors = { SP_COL_BX, SP_COL_BY, SP_COL_BZ };
-    for (int b = 0; b < 3; b++) {
-      float bVal = baselines[b];
-      if (isFiniteValue(bVal) && bVal >= yMin && bVal <= yMax) {
-        float by = map(bVal, yMin, yMax, cBottom, cTop);
-        stroke(blColors[b], 60);
-        strokeWeight(0.5);
-        for (int dx = cLeft; dx < cRight; dx += 8) {
-          line(dx, by, min(dx + 4, cRight), by);
-        }
-      }
+  if (yMin <= 0 && yMax >= 0) {
+    float zeroY = map(0, yMin, yMax, cBottom, cTop);
+    stroke(UI_BORDER, 190);
+    strokeWeight(1);
+    for (int dx = cLeft; dx < cRight; dx += 10) {
+      line(dx, zeroY, min(dx + 5, cRight), zeroY);
     }
   }
 
   noFill();
-  strokeWeight(1.5);
-  drawWaveLine(_spBx, SP_COL_BX, cLeft, cRight, cTop, cBottom, yMin, yMax);
-  drawWaveLine(_spBy, SP_COL_BY, cLeft, cRight, cTop, cBottom, yMin, yMax);
-  drawWaveLine(_spBz, SP_COL_BZ, cLeft, cRight, cTop, cBottom, yMin, yMax);
+  strokeWeight(1.7);
+  drawWaveLine(_spBx, baselineX, SP_COL_BX, cLeft, cRight, cTop, cBottom, yMin, yMax);
+  drawWaveLine(_spBy, baselineY, SP_COL_BY, cLeft, cRight, cTop, cBottom, yMin, yMax);
+  drawWaveLine(_spBz, baselineZ, SP_COL_BZ, cLeft, cRight, cTop, cBottom, yMin, yMax);
   noStroke();
 
   int legX = cLeft + 8;
   int legY = cTop + 4;
-  textSize(11);
+  useMonoFont(11);
   textAlign(LEFT, TOP);
 
   fill(SP_COL_BX);
-  text("Bx: " + nf(sensorBx, 1, 2), legX, legY);
+  text("dBx " + nf(sensorBx - baselineX, 1, 2), legX, legY);
   fill(SP_COL_BY);
-  text("By: " + nf(sensorBy, 1, 2), legX + 130, legY);
+  text("dBy " + nf(sensorBy - baselineY, 1, 2), legX + 140, legY);
   fill(SP_COL_BZ);
-  text("Bz: " + nf(sensorBz, 1, 2), legX + 260, legY);
+  text("dBz " + nf(sensorBz - baselineZ, 1, 2), legX + 280, legY);
 
-  fill(80);
-  textSize(9);
+  fill(UI_DIM);
+  useUIFont(9);
   textAlign(LEFT, TOP);
-  text("uT", SP_X + 10, cTop);
+  text("uT", SP_X + 14, cTop);
 
-  fill(90);
-  textSize(10);
+  fill(UI_DIM);
+  useUIFont(10);
   textAlign(CENTER, TOP);
-  text("Sensor Waveform (last " + _spCount + " frames)", SP_X + SP_W / 2, SP_Y + SP_H - 18);
+  text("last " + _spCount + " valid frames", SP_X + SP_W / 2, SP_Y + SP_H - 18);
 
   textAlign(LEFT, BASELINE);
-  textSize(14);
+  useUIFont(14);
   noStroke();
 }
 
-void drawWaveLine(float[] buf, color col, int cL, int cR, int cT, int cB,
+float plotDelta(float value, float baseline) {
+  return isBaselineDone() ? value - baseline : value;
+}
+
+void drawWaveLine(float[] buf, float baseline, color col, int cL, int cR, int cT, int cB,
                   float yMin, float yMax) {
   stroke(col);
   boolean drawing = false;
 
   for (int i = 0; i < _spCount; i++) {
     int idx = ringIndex(i);
-    float value = buf[idx];
+    float value = plotDelta(buf[idx], baseline);
 
     if (!isFiniteValue(value)) {
       if (drawing) {

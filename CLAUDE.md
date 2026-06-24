@@ -26,7 +26,7 @@ Each `.pde` file is a **tab** compiled into the same sketch. Execution starts in
 | `SensorReceiver.pde` | Serial port manager. Reads CSV from sensor via `serialEvent()`. Globals: `sensorBx/By/Bz`, `newDataAvailable`. |
 | `Baseline.pde` | Collects 300 samples on startup to compute zero-force baseline (`baselineX/Y/Z`). Shows 3 parallel progress bars. |
 | `Decoupling.pde` | Stores S and D=S⁻¹ matrices for H2/H4/H6. `computeForce(dVx, dVy, dVz)` → `forceX/Y/Z`. Includes `invert3x3()` / `det3x3()` utilities. |
-| `MatrixHUD.pde` | Interactive overlay to inspect S and D matrices. Toggle with [M], switch sensor [1/2/3], toggle S/D [T]. |
+| `MatrixHUD.pde` | Always-visible overlay for S and D matrices. Switch sensor [1/2/3], toggle S/D [T]. |
 
 **Data flow:**
 ```
@@ -39,7 +39,6 @@ Serial CSV → SensorReceiver → Baseline (300 samples) → Decoupling (F = D �
 
 | Key | Action |
 |-----|--------|
-| `M` | Show / hide matrix panel |
 | `T` | Toggle between S (uT/N) and D (N/uT) view |
 | `1` / `2` / `3` | Select sensor H2 / H4 / H6 |
 

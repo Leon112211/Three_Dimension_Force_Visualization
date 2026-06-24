@@ -16,15 +16,15 @@
 PGraphics _pg3d;
 
 static final int PG_W = 400;
-static final int PG_H = 380;
+static final int PG_H = 400;
 
 // --- layout positions ---
 static final int FV_3D_X  = 30;
-static final int FV_3D_Y  = 200;
-static final int FV_BAR_X = 460;
-static final int FV_BAR_Y = 200;
-static final int FV_BAR_W = 390;
-static final int FV_BAR_H = 380;
+static final int FV_3D_Y  = 210;
+static final int FV_BAR_X = 450;
+static final int FV_BAR_Y = 210;
+static final int FV_BAR_W = 400;
+static final int FV_BAR_H = 400;
 
 // --- rotation state ---
 float _fvRotX = -0.4;   // initial tilt (radians)
@@ -35,10 +35,10 @@ float _fvRotY =  0.6;   // initial pan
 static final float FV_FORCE_REF = 20.0;   // N → 120 px (full axis)
 
 // --- axis colors (reuse project palette) ---
-color FV_COL_X = 0xFF508CFF;   // (80, 140, 255)
-color FV_COL_Y = 0xFF64DC64;   // (100, 220, 100)
-color FV_COL_Z = 0xFFFFA03C;   // (255, 160, 60)
-color FV_COL_R = 0xFFFFFFC8;   // (255, 255, 200) resultant
+color FV_COL_X = 0xFF5A92FF;
+color FV_COL_Y = 0xFF66E07D;
+color FV_COL_Z = 0xFFFFA23D;
+color FV_COL_R = 0xFFFFF5B8;
 
 // ============================================================
 void initForceView() {
@@ -62,8 +62,11 @@ void draw3DPanel() {
   float scale = axisLen / FV_FORCE_REF;
 
   _pg3d.beginDraw();
-  _pg3d.background(25, 25, 35);
+  _pg3d.background(UI_PANEL);
+  if (UI_FONT != null) _pg3d.textFont(UI_FONT);
   _pg3d.lights();
+  _pg3d.ambientLight(55, 60, 70);
+  _pg3d.directionalLight(190, 210, 230, -0.5, -0.8, -0.4);
 
   // center camera
   _pg3d.translate(PG_W / 2, PG_H / 2, 0);
@@ -72,7 +75,7 @@ void draw3DPanel() {
 
   // --- draw grid-like axis lines (thin, gray) ---
   _pg3d.strokeWeight(1);
-  _pg3d.stroke(80);
+  _pg3d.stroke(105, 116, 135, 160);
   // X axis
   _pg3d.line(-axisLen, 0, 0, axisLen, 0, 0);
   // Y axis (Processing Y is inverted; we keep convention: up = +Y displayed)
@@ -116,13 +119,9 @@ void draw3DPanel() {
   // blit to main canvas
   image(_pg3d, FV_3D_X, FV_3D_Y);
 
-  // panel label (2D, on main canvas)
-  fill(100);
-  textSize(10);
-  textAlign(CENTER, TOP);
-  text("Drag to rotate", FV_3D_X + PG_W / 2, FV_3D_Y + PG_H + 2);
+  drawPanelFrame(FV_3D_X, FV_3D_Y, PG_W, PG_H, "3D Force Vector");
   textAlign(LEFT, BASELINE);
-  textSize(14);
+  useUIFont(14);
 }
 
 // ============================================================
@@ -191,10 +190,7 @@ void drawBarChart() {
   int cw = FV_BAR_W;
   int ch = FV_BAR_H;
 
-  // panel background
-  fill(25, 25, 35);
-  noStroke();
-  rect(cx, cy, cw, ch, 6);
+  drawPanelBase(cx, cy, cw, ch, "Force Components");
 
   float fMag = sqrt(forceX*forceX + forceY*forceY + forceZ*forceZ);
   float[] vals   = { forceX, forceY, forceZ, fMag };
@@ -211,9 +207,13 @@ void drawBarChart() {
   int halfH    = (ch / 2) - 40;     // max bar extent (leave room for labels)
 
   // zero line
-  stroke(70);
+  stroke(UI_GRID);
   strokeWeight(1);
   line(cx + 10, zeroY, cx + cw - 10, zeroY);
+  stroke(UI_GRID, 120);
+  for (int gy = cy + 54; gy < cy + ch - 44; gy += 42) {
+    line(cx + 16, gy, cx + cw - 16, gy);
+  }
   noStroke();
 
   for (int i = 0; i < barCount; i++) {
@@ -237,8 +237,8 @@ void drawBarChart() {
     }
 
     // value label
-    fill(220);
-    textSize(11);
+    fill(UI_TEXT);
+    useMonoFont(11);
     textAlign(CENTER, BOTTOM);
     float labelY;
     if (i < 3) {
@@ -258,20 +258,20 @@ void drawBarChart() {
 
     // axis name below chart
     fill(cols[i]);
-    textSize(13);
+    useUIFont(13);
     textAlign(CENTER, TOP);
     text(names[i], bx + barW / 2, cy + ch - 22);
   }
 
   // unit label
-  fill(90);
-  textSize(10);
+  fill(UI_DIM);
+  useUIFont(10);
   textAlign(CENTER, TOP);
   text("Force (N)", cx + cw / 2, cy + ch - 6);
 
   // reset
   textAlign(LEFT, BASELINE);
-  textSize(14);
+  useUIFont(14);
   noStroke();
 }
 

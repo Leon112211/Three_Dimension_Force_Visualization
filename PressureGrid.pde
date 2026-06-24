@@ -1,8 +1,7 @@
 // ============================================================
 // PressureGrid.pde
-// Renders a deformable mesh surface showing Z-axis force as a
-// Gaussian depression — like pressing a finger into a membrane.
-// Includes a wireframe reference cage underneath for depth cue.
+// Dot-matrix pressure pad: a circular array of green dots that swell
+// into force-colored rounded rects (green → red) as local Z-force rises.
 //
 // Public API:
 //   initPressureGrid()   — call in setup()
@@ -15,21 +14,21 @@
 // --- offscreen P3D buffer ---
 PGraphics _pgGrid;
 
-static final int PG_GRID_W = 460;
-static final int PG_GRID_H = 420;
+static final int PG_GRID_W = 450;
+static final int PG_GRID_H = 400;
 static final int PG_GRID_X = 870;
-static final int PG_GRID_Y = 190;
+static final int PG_GRID_Y = 210;
 
 // --- mesh parameters ---
 static final int   GRID_N     = 30;      // NxN vertices
 static final float GRID_SIZE  = 280.0;   // world units extent
 static final float PG_SIGMA   = 5.5;     // gaussian spread (grid cells)
 static final float FZ_SCALE   = 4.0;     // forceZ -> displacement multiplier
-static final float PG_FZ_REF  = 50.0;    // Fz at which center reaches full blue (N)
+static final float PG_FZ_REF  = 20.0;    // Fz (N) at which center saturates to full red; ≥ this stays red (clamped)
 
-// --- rotation state ---
-float _pgRotX = -0.65;
-float _pgRotY =  0.45;
+// --- rotation state (default: top-down — dot matrix faces the camera) ---
+float _pgRotX = 0.0;
+float _pgRotY = 0.0;
 
 // ============================================================
 void initPressureGrid() {
@@ -45,101 +44,42 @@ void drawPressureGrid() {
   // center displacement driven by Fz
   float centerDisp = forceZ * FZ_SCALE;    // positive Fz = push down
 
-  // --- precompute vertex heights ---
-  float[][] hts = new float[GRID_N + 1][GRID_N + 1];
-  float refDisp = FZ_SCALE * PG_FZ_REF;   // fixed reference for color mapping
+  // --- dot-matrix references (color + size scale with local force) ---
+  float refDisp = FZ_SCALE * PG_FZ_REF;   // fixed reference for color/size mapping
   float cx = GRID_N / 2.0;
   float cz = GRID_N / 2.0;
   float sig2 = 2.0 * PG_SIGMA * PG_SIGMA;
 
-  for (int i = 0; i <= GRID_N; i++) {
-    for (int j = 0; j <= GRID_N; j++) {
-      float dx = i - cx;
-      float dz = j - cz;
-      hts[i][j] = centerDisp * exp(-(dx * dx + dz * dz) / sig2);
-    }
-  }
-
   // ---- begin offscreen render ----
   _pgGrid.beginDraw();
-  _pgGrid.background(30, 30, 40);
-  _pgGrid.lights();
-  _pgGrid.ambientLight(50, 50, 55);
-  _pgGrid.directionalLight(200, 200, 210, -0.4, -1.0, -0.5);
+  _pgGrid.background(UI_PANEL);
+  _pgGrid.noLights();   // flat LED-dot look (no 3D shading)
 
-  _pgGrid.translate(PG_GRID_W / 2, PG_GRID_H * 0.42, 0);
+  _pgGrid.translate(PG_GRID_W / 2, PG_GRID_H * 0.5, 0);
   _pgGrid.rotateX(_pgRotX);
   _pgGrid.rotateY(_pgRotY);
 
-  // === 1. Filled color surface (QUAD_STRIP per row) ===
+  // === Dot-matrix pressure pad ===
+  // Rectangular base (GRID_N×GRID_N dots). Each dot is small + green at rest,
+  // and swells into a force-colored rounded rect under the circular Gaussian
+  // deformation. Max-size rects keep a gap so they never touch.
+  _pgGrid.noStroke();
+  float minSize   = cellSize * 0.32;      // rest: small dot
+  float maxSize   = cellSize * 0.82;      // max: rounded rect (leaves a gap)
+  float maxCorner = cellSize * 0.28;      // caps corner radius -> rounded square
   for (int i = 0; i < GRID_N; i++) {
-    _pgGrid.beginShape(QUAD_STRIP);
-    _pgGrid.noStroke();
-    for (int j = 0; j <= GRID_N; j++) {
-      for (int di = 0; di <= 1; di++) {
-        float wx = (i + di) * cellSize - halfGrid;
-        float wz = j * cellSize - halfGrid;
-        float wy = hts[i + di][j];
-        _pgGrid.fill(pgHeightColor(wy, refDisp));
-        _pgGrid.vertex(wx, wy, wz);
-      }
-    }
-    _pgGrid.endShape();
-  }
-
-  // === 2. Surface wireframe (every 5 cells for clarity) ===
-  int wireStep = 5;
-  _pgGrid.noFill();
-  _pgGrid.stroke(0, 0, 0, 55);
-  _pgGrid.strokeWeight(0.6);
-
-  // grid lines along Z
-  for (int i = 0; i <= GRID_N; i += wireStep) {
     for (int j = 0; j < GRID_N; j++) {
-      float x0 = i * cellSize - halfGrid;
-      float z0 = j * cellSize - halfGrid;
-      float z1 = (j + 1) * cellSize - halfGrid;
-      _pgGrid.line(x0, hts[i][j], z0, x0, hts[i][j + 1], z1);
+      float wx = (i + 0.5) * cellSize - halfGrid;
+      float wz = (j + 0.5) * cellSize - halfGrid;
+      float dx = (i + 0.5) - cx;
+      float dz = (j + 0.5) - cz;
+      float disp = centerDisp * exp(-(dx * dx + dz * dz) / sig2);
+      float t = constrain(abs(disp) / refDisp, 0, 1);
+      float size = lerp(minSize, maxSize, t);
+      float cr   = min(size * 0.5, maxCorner);
+      _pgGrid.fill(pgHeightColor(disp, refDisp));
+      _pgGrid.rect(wx - size / 2, wz - size / 2, size, size, cr);
     }
-  }
-  // grid lines along X
-  for (int j = 0; j <= GRID_N; j += wireStep) {
-    for (int i = 0; i < GRID_N; i++) {
-      float x0 = i * cellSize - halfGrid;
-      float x1 = (i + 1) * cellSize - halfGrid;
-      float z0 = j * cellSize - halfGrid;
-      _pgGrid.line(x0, hts[i][j], z0, x1, hts[i + 1][j], z0);
-    }
-  }
-
-  // === 3. Reference cage underneath ===
-  float cageBottom = max(abs(centerDisp) * 1.3, 18);
-  _pgGrid.stroke(100, 100, 120, 70);
-  _pgGrid.strokeWeight(0.5);
-  _pgGrid.noFill();
-
-  // four vertical corner pillars
-  _pgGrid.line(-halfGrid, 0, -halfGrid, -halfGrid, cageBottom, -halfGrid);
-  _pgGrid.line( halfGrid, 0, -halfGrid,  halfGrid, cageBottom, -halfGrid);
-  _pgGrid.line( halfGrid, 0,  halfGrid,  halfGrid, cageBottom,  halfGrid);
-  _pgGrid.line(-halfGrid, 0,  halfGrid, -halfGrid, cageBottom,  halfGrid);
-
-  // bottom rectangle outline
-  _pgGrid.beginShape();
-  _pgGrid.vertex(-halfGrid, cageBottom, -halfGrid);
-  _pgGrid.vertex( halfGrid, cageBottom, -halfGrid);
-  _pgGrid.vertex( halfGrid, cageBottom,  halfGrid);
-  _pgGrid.vertex(-halfGrid, cageBottom,  halfGrid);
-  _pgGrid.endShape(CLOSE);
-
-  // bottom grid lines (sparse)
-  for (int i = 0; i <= GRID_N; i += wireStep) {
-    float x = i * cellSize - halfGrid;
-    _pgGrid.line(x, cageBottom, -halfGrid, x, cageBottom, halfGrid);
-  }
-  for (int j = 0; j <= GRID_N; j += wireStep) {
-    float z = j * cellSize - halfGrid;
-    _pgGrid.line(-halfGrid, cageBottom, z, halfGrid, cageBottom, z);
   }
 
   _pgGrid.endDraw();
@@ -147,35 +87,33 @@ void drawPressureGrid() {
   // ---- blit to main canvas ----
   image(_pgGrid, PG_GRID_X, PG_GRID_Y);
 
-  // label below
-  fill(100);
-  textSize(10);
-  textAlign(CENTER, TOP);
-  text("Z-axis Pressure   Fz = " + nf(forceZ, 1, 3) + " N   |   Drag to rotate",
-       PG_GRID_X + PG_GRID_W / 2, PG_GRID_Y + PG_GRID_H + 2);
+  drawPanelFrame(PG_GRID_X, PG_GRID_Y, PG_GRID_W, PG_GRID_H, "Z-Axis Pressure");
+  useMonoFont(11);
+  fill(UI_TEXT);
+  textAlign(RIGHT, TOP);
+  text("Fz " + nf(forceZ, 1, 3) + " N", PG_GRID_X + PG_GRID_W - 14, PG_GRID_Y + 9);
   textAlign(LEFT, BASELINE);
-  textSize(14);
+  useUIFont(14);
 }
 
 // ============================================================
-// Color mapping: absolute vertex displacement against fixed ref.
+// Color mapping: force gradient — green (rest) → red (max).
 //   t = |displacement| / (FZ_SCALE * PG_FZ_REF)
-//   t=0  -> red   H=0    (no force / edge)
-//   t=0.5 -> green H=120  (moderate force)
-//   t=1  -> blue  H=240  (full-scale force)
-// Small Fz → everything stays red. Large Fz → center turns blue.
+//   t=0   -> green    (no force / rest dot)
+//   t=0.5 -> yellow
+//   t=1   -> red      (full-scale force)
 // ============================================================
 color pgHeightColor(float h, float refD) {
   float t = constrain(abs(h) / refD, 0, 1);
-
-  pushStyle();
-  colorMode(HSB, 360, 100, 100);
-  float hue = t * 240;        // 0(red) -> 120(green) -> 240(blue)
-  float sat = 70 + t * 25;    // 70% -> 95%
-  float bri = 80 + t * 10;    // 80% -> 90%
-  color c = color(hue, sat, bri);
-  popStyle();
-  return c;
+  color c0 = color(80, 200, 100);    // green (rest)
+  color c1 = color(180, 210, 70);    // yellow-green
+  color c2 = color(235, 200, 60);    // yellow
+  color c3 = color(240, 140, 60);    // orange
+  color c4 = color(240, 74, 62);     // red (max)
+  if (t < 0.25f) return lerpColor(c0, c1, t / 0.25f);
+  if (t < 0.5f)  return lerpColor(c1, c2, (t - 0.25f) / 0.25f);
+  if (t < 0.75f) return lerpColor(c2, c3, (t - 0.5f) / 0.25f);
+  return lerpColor(c3, c4, (t - 0.75f) / 0.25f);
 }
 
 // ============================================================

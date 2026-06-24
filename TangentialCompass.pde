@@ -13,7 +13,8 @@
 // --- layout ---
 static final int TC_X = 30;
 static final int TC_Y = 630;
-static final int TC_SIZE = 260;      // bounding square
+static final int TC_W = 400;         // panel width  (col A)
+static final int TC_SIZE = 280;      // panel height (row 3)
 static final float TC_R = 105.0;     // gauge circle radius (px)
 static final float TC_FXY_REF = 5.0; // Fxy at which arrow reaches full length (N)
 
@@ -23,33 +24,30 @@ void initCompass() {
 
 // ============================================================
 void drawCompass(float fx, float fy) {
-  float cx = TC_X + TC_SIZE / 2.0;
+  float cx = TC_X + TC_W / 2.0;
   float cy = TC_Y + TC_SIZE / 2.0;
 
-  // --- panel background ---
-  fill(20, 22, 30);
-  noStroke();
-  rect(TC_X, TC_Y, TC_SIZE, TC_SIZE, 6);
+  drawPanelBase(TC_X, TC_Y, TC_W, TC_SIZE, "XY Tangential Force");
 
   // --- outer ring ---
   noFill();
-  stroke(60, 65, 80);
+  stroke(76, 88, 112);
   strokeWeight(2);
   ellipse(cx, cy, TC_R * 2, TC_R * 2);
 
   // thin inner ring
-  stroke(45, 48, 58);
+  stroke(UI_GRID);
   strokeWeight(0.5);
   ellipse(cx, cy, TC_R * 1.4, TC_R * 1.4);
 
   // --- crosshair reference lines ---
-  stroke(50, 52, 62);
+  stroke(UI_GRID);
   strokeWeight(0.6);
   line(cx - TC_R, cy, cx + TC_R, cy);   // horizontal
   line(cx, cy - TC_R, cx, cy + TC_R);   // vertical
 
   // --- tick marks around circle (every 30 deg) ---
-  stroke(65, 68, 80);
+  stroke(82, 93, 116);
   strokeWeight(1.0);
   for (int deg = 0; deg < 360; deg += 30) {
     float rad = radians(deg);
@@ -63,10 +61,10 @@ void drawCompass(float fx, float fy) {
   // --- axis labels ---
   textSize(11);
   textAlign(CENTER, CENTER);
-  fill(80, 140, 255);   // X color
+  fill(UI_X);   // X color
   text("+X", cx + TC_R + 14, cy);
   text("-X", cx - TC_R - 14, cy);
-  fill(100, 220, 100);  // Y color
+  fill(UI_Y);  // Y color
   text("+Y", cx, cy - TC_R - 12);
   text("-Y", cx, cy + TC_R + 12);
 
@@ -136,15 +134,15 @@ void drawCompass(float fx, float fy) {
 
   // --- center dot ---
   noStroke();
-  fill(150, 155, 170);
+  fill(UI_TEXT);
   ellipse(cx, cy, 6, 6);
 
   // --- text readouts ---
   textAlign(LEFT, BASELINE);
-  textSize(10);
+  useMonoFont(10);
 
   // magnitude
-  fill(180);
+  fill(UI_TEXT);
   text("|Fxy| = " + nf(fxy, 1, 3) + " N", TC_X + 6, TC_Y + TC_SIZE - 20);
 
   // angle (degrees)
@@ -152,15 +150,9 @@ void drawCompass(float fx, float fy) {
   if (angleDeg < 0) angleDeg += 360;
   text("Angle = " + nf(angleDeg, 1, 1) + " deg", TC_X + 6, TC_Y + TC_SIZE - 6);
 
-  // --- title ---
-  fill(90);
-  textSize(10);
-  textAlign(CENTER, TOP);
-  text("XY Tangential Force", TC_X + TC_SIZE / 2, TC_Y + 3);
-
   // reset state
   textAlign(LEFT, BASELINE);
-  textSize(14);
+  useUIFont(14);
   noStroke();
 }
 
