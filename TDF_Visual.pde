@@ -148,16 +148,25 @@ void drawTopHUD(float dVx, float dVy, float dVz) {
               color(78, 51, 28), UI_WARN);
   }
 
-  int magX = x + 18;
-  int forceX0 = x + 344;
-  int baseY = y + 68;
+  // Calibration button (top-right) — click to recalibrate baseline
+  drawCalibrationButton(isCalibrationButtonHit(uiMouseX(), uiMouseY()));
+
+  int baseX0 = x + 18;       // Baseline (first column)
+  int magX = x + 240;        // Magnetic delta
+  int forceX0 = x + 462;     // Decoupled force
+  int baseY = y + 82;        // below the title/badge/button row -> no overlap
   int rowH = 22;
 
   useUIFont(11);
   textAlign(LEFT, TOP);
   fill(UI_MUTED);
+  text("Baseline (uT)", baseX0, baseY - 22);
   text("Magnetic delta (uT)", magX, baseY - 22);
   text("Decoupled force (N)", forceX0, baseY - 22);
+
+  drawReadoutRow(baseX0, baseY, "Bx", baselineX, UI_X);
+  drawReadoutRow(baseX0, baseY + rowH, "By", baselineY, UI_Y);
+  drawReadoutRow(baseX0, baseY + rowH * 2, "Bz", baselineZ, UI_Z);
 
   drawReadoutRow(magX, baseY, "dBx", dVx, UI_X);
   drawReadoutRow(magX, baseY + rowH, "dBy", dVy, UI_Y);
@@ -166,13 +175,6 @@ void drawTopHUD(float dVx, float dVy, float dVz) {
   drawReadoutRow(forceX0, baseY, "Fx", forceX, UI_X);
   drawReadoutRow(forceX0, baseY + rowH, "Fy", forceY, UI_Y);
   drawReadoutRow(forceX0, baseY + rowH * 2, "Fz", forceZ, UI_Z);
-
-  useMonoFont(10);
-  fill(UI_DIM);
-  textAlign(LEFT, TOP);
-  text("Baseline  Bx=" + nf(baselineX, 1, 2)
-       + "  By=" + nf(baselineY, 1, 2)
-       + "  Bz=" + nf(baselineZ, 1, 2), x + 560, baseY + rowH);
 
   useUIFont(14);
 }
@@ -184,6 +186,30 @@ void drawReadoutRow(int x, int y, String label, float value, color c) {
   text(label, x, y);
   fill(UI_TEXT);
   text(nf(value, 1, 4), x + 44, y);
+}
+
+// --- Calibration button (clickable, in the Top HUD) ---
+static final int CAL_BTN_X = 726;
+static final int CAL_BTN_Y = 55;
+static final int CAL_BTN_W = 110;
+static final int CAL_BTN_H = 30;
+
+boolean isCalibrationButtonHit(float mx, float my) {
+  return mx >= CAL_BTN_X && mx <= CAL_BTN_X + CAL_BTN_W &&
+         my >= CAL_BTN_Y && my <= CAL_BTN_Y + CAL_BTN_H;
+}
+
+void drawCalibrationButton(boolean hover) {
+  noStroke();
+  fill(hover ? UI_BORDER_ACTIVE : UI_PANEL_HI);
+  rect(CAL_BTN_X, CAL_BTN_Y, CAL_BTN_W, CAL_BTN_H, 6);
+  fill(UI_TEXT);
+  useUIFont(13);
+  textAlign(CENTER, CENTER);
+  text("Calibration", CAL_BTN_X + CAL_BTN_W / 2.0, CAL_BTN_Y + CAL_BTN_H / 2.0 + 1);
+  textAlign(LEFT, BASELINE);
+  useUIFont(14);
+  noStroke();
 }
 
 // ============================================================
@@ -204,8 +230,42 @@ void keyPressed() {
 
 void mouseDragged() {
   updateUILayout();
-  handleFVDrag();
+  if (_tcRefDragging) { updateCompassSlider(); return; }   // compass threshold slider
+  if (_pgRefDragging) { updateRefSlider(); return; }       // pressure threshold slider
+  if (!_pgDragging) handleFVDrag();   // skip ForceView while orbiting the pressure grid
   handlePGDrag();
+}
+
+void mouseReleased() {
+  endPGDrag();
+  endRefSliderDrag();
+  endCompassSliderDrag();
+}
+
+void mousePressed() {
+  // Clickable controls are only shown/active during normal operation
+  if (!isBaselineDone() || !isReceiverReady()) return;
+  float mx = uiMouseX();
+  float my = uiMouseY();
+  if (isCalibrationButtonHit(mx, my)) {
+    initBaseline();
+    println("[TDF] Baseline recalibration triggered by Calibration button.");
+    return;
+  }
+  handleMatrixMousePress(mx, my);   // sensor tabs + S/D toggle
+  if (isResetViewButtonHit(mx, my)) {   // pressure-grid reset view
+    resetPGView();
+    return;
+  }
+  if (isRefSliderHit(mx, my)) {         // pressure-grid threshold slider
+    _pgRefDragging = true;
+    return;
+  }
+  if (isCompassSliderHit(mx, my)) {     // compass threshold slider
+    _tcRefDragging = true;
+    return;
+  }
+  startPGDrag(mx, my);              // begin free orbit if press is in the pressure panel
 }
 
 void updateUILayout() {

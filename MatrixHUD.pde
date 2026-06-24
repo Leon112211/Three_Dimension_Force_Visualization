@@ -5,60 +5,64 @@
 
 boolean _showDecoupling = false;
 
-void drawMatrixHUD() {
-  int panelW = 450;
-  int panelH = 160;
-  int px = DESIGN_W - panelW - 30;
-  int py = 30;
+// --- MatrixHUD layout (design coords; shared by draw + click hit-test) ---
+static final int MX_PANEL_W = 450;
+static final int MX_PANEL_H = 160;
+static final int MX_PX = DESIGN_W - MX_PANEL_W - 30;
+static final int MX_PY = 30;
+static final int MX_TAB_W = 52;
+static final int MX_TAB_H = 22;
+static final int MX_TAB_GAP = 8;
+static final int MX_TAB_Y = MX_PY + 32;
+static final int MX_TAB_START_X = MX_PX + (MX_PANEL_W - NUM_SENSORS * (MX_TAB_W + MX_TAB_GAP)) / 2;
+static final int MX_TOG_W = 56;
+static final int MX_TOG_H = 22;
+static final int MX_TOG_X = MX_PX + MX_PANEL_W - MX_TOG_W - 16;
+static final int MX_TOG_Y = MX_TAB_Y;
 
+void drawMatrixHUD() {
   noStroke();
   fill(0, 0, 0, 80);
-  rect(px + 2, py + 3, panelW, panelH, 8);
+  rect(MX_PX + 2, MX_PY + 3, MX_PANEL_W, MX_PANEL_H, 8);
   fill(UI_PANEL, 238);
-  rect(px, py, panelW, panelH, 8);
+  rect(MX_PX, MX_PY, MX_PANEL_W, MX_PANEL_H, 8);
 
   stroke(UI_BORDER_ACTIVE, 180);
   strokeWeight(1);
   noFill();
-  rect(px + 0.5, py + 0.5, panelW - 1, panelH - 1, 8);
+  rect(MX_PX + 0.5, MX_PY + 0.5, MX_PANEL_W - 1, MX_PANEL_H - 1, 8);
   noStroke();
 
-  String matType = _showDecoupling ? "D  (N/uT)" : "S  (uT/N)";
-  textAlign(CENTER, TOP);
-  fill(UI_TEXT);
-  useUIFont(13);
-  text(SENSOR_NAMES[activeSensor] + "   " + matType, px + panelW / 2, py + 9);
+  drawPanelTitle(MX_PX, MX_PY, _showDecoupling ? "D (N/uT)" : "S (uT/N)");
 
-  int tabW = 52;
-  int tabH = 22;
-  int tabY = py + 32;
-  int tabStartX = px + (panelW - NUM_SENSORS * (tabW + 8)) / 2;
+  // sensor tabs (clickable) + S/D toggle (clickable) — see handleMatrixMousePress
+  float mx = uiMouseX();
+  float my = uiMouseY();
 
   for (int i = 0; i < NUM_SENSORS; i++) {
-    int tx = tabStartX + i * (tabW + 8);
-    fill(i == activeSensor ? UI_BORDER_ACTIVE : UI_PANEL_HI);
-    rect(tx, tabY, tabW, tabH, 4);
+    int tx = MX_TAB_START_X + i * (MX_TAB_W + MX_TAB_GAP);
+    boolean tabHover = matrixTabHit(i, mx, my);
+    fill(i == activeSensor ? UI_BORDER_ACTIVE : (tabHover ? UI_BORDER : UI_PANEL_HI));
+    rect(tx, MX_TAB_Y, MX_TAB_W, MX_TAB_H, 4);
 
     fill(i == activeSensor ? UI_TEXT : UI_MUTED);
     useUIFont(12);
     textAlign(CENTER, CENTER);
-    text(SENSOR_NAMES[i], tx + tabW / 2, tabY + tabH / 2);
+    text(SENSOR_NAMES[i], tx + MX_TAB_W / 2, MX_TAB_Y + MX_TAB_H / 2);
   }
 
-  int togW = 56;
-  int togH = 22;
-  int togX = px + panelW - togW - 16;
-  int togY = tabY;
-  fill(_showDecoupling ? color(128, 83, 43) : color(37, 100, 70));
-  rect(togX, togY, togW, togH, 4);
+  boolean togHover = matrixToggleHit(mx, my);
+  color togBase = _showDecoupling ? color(128, 83, 43) : color(37, 100, 70);
+  fill(togHover ? lerpColor(togBase, color(255), 0.18f) : togBase);
+  rect(MX_TOG_X, MX_TOG_Y, MX_TOG_W, MX_TOG_H, 4);
   fill(UI_TEXT);
   useUIFont(11);
   textAlign(CENTER, CENTER);
-  text(_showDecoupling ? "D" : "S", togX + togW / 2, togY + togH / 2);
+  text(_showDecoupling ? "D" : "S", MX_TOG_X + MX_TOG_W / 2, MX_TOG_Y + MX_TOG_H / 2);
 
   float[][] mat = _showDecoupling ? D_ALL[activeSensor] : S_ALL[activeSensor];
-  int gridX = px + 36;
-  int gridY = tabY + tabH + 17;
+  int gridX = MX_PX + 36;
+  int gridY = MX_TAB_Y + MX_TAB_H + 17;
   int cellW = 104;
   int cellH = 24;
 
@@ -112,4 +116,30 @@ void handleMatrixKey(char k) {
   if (k == '1') selectSensor(0);
   if (k == '2') selectSensor(1);
   if (k == '3') selectSensor(2);
+}
+
+// --- Mouse equivalents of the keyboard shortcuts (clickable tabs/toggle) ---
+boolean matrixTabHit(int i, float mx, float my) {
+  int tx = MX_TAB_START_X + i * (MX_TAB_W + MX_TAB_GAP);
+  return mx >= tx && mx <= tx + MX_TAB_W &&
+         my >= MX_TAB_Y && my <= MX_TAB_Y + MX_TAB_H;
+}
+
+boolean matrixToggleHit(float mx, float my) {
+  return mx >= MX_TOG_X && mx <= MX_TOG_X + MX_TOG_W &&
+         my >= MX_TOG_Y && my <= MX_TOG_Y + MX_TOG_H;
+}
+
+// Click H2/H4/H6 tab -> select sensor (same as [1/2/3]);
+// click S/D toggle -> toggle view (same as [T]).
+void handleMatrixMousePress(float mx, float my) {
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    if (matrixTabHit(i, mx, my)) {
+      selectSensor(i);
+      return;
+    }
+  }
+  if (matrixToggleHit(mx, my)) {
+    _showDecoupling = !_showDecoupling;
+  }
 }

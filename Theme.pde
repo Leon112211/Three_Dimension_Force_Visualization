@@ -45,16 +45,21 @@ void drawAppBackdrop() {
   noStroke();
   fill(UI_BG);
   rect(0, 0, DESIGN_W, DESIGN_H);
+}
 
-  stroke(255, 255, 255, 10);
-  strokeWeight(1);
-  for (int x = 60; x < DESIGN_W; x += 60) {
-    line(x, 0, x, DESIGN_H);
-  }
-  for (int y = 60; y < DESIGN_H; y += 60) {
-    line(0, y, DESIGN_W, y);
-  }
+// Shared panel title: subtle chip on the top border + muted label.
+// Used by drawPanelBase, drawPanelFrame, and MatrixHUD so every panel title
+// looks identical. Chip uses UI_PANEL_HI so it shows on filled and border-only
+// panels alike.
+void drawPanelTitle(float x, float y, String title) {
+  if (title == null || title.length() == 0) return;
+  useUIFont(11);
+  textAlign(LEFT, TOP);
   noStroke();
+  fill(UI_PANEL_HI);
+  rect(x + 12, y + 5, textWidth(title) + 12, 16, 4);
+  fill(UI_MUTED);
+  text(title, x + 18, y + 8);
 }
 
 void drawPanelBase(float x, float y, float w, float h, String title) {
@@ -71,12 +76,7 @@ void drawPanelBase(float x, float y, float w, float h, String title) {
   rect(x + 0.5, y + 0.5, w - 1, h - 1, 8);
   noStroke();
 
-  if (title.length() > 0) {
-    useUIFont(11);
-    textAlign(LEFT, TOP);
-    fill(UI_MUTED);
-    text(title, x + 14, y + 10);
-  }
+  drawPanelTitle(x, y, title);
 }
 
 void drawPanelFrame(float x, float y, float w, float h, String title) {
@@ -86,14 +86,7 @@ void drawPanelFrame(float x, float y, float w, float h, String title) {
   rect(x + 0.5, y + 0.5, w - 1, h - 1, 8);
   noStroke();
 
-  if (title.length() > 0) {
-    useUIFont(11);
-    fill(UI_PANEL);
-    rect(x + 12, y + 5, textWidth(title) + 12, 16, 4);
-    textAlign(LEFT, TOP);
-    fill(UI_MUTED);
-    text(title, x + 18, y + 8);
-  }
+  drawPanelTitle(x, y, title);
 }
 
 void drawBadge(float x, float y, String label, color bg, color fg) {

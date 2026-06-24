@@ -78,16 +78,16 @@ void drawBaselineHUD() {
   int px = (DESIGN_W - panelW) / 2;
   int py = (DESIGN_H - panelH) / 2;
 
-  drawPanelBase(px, py, panelW, panelH, "");
+  drawPanelBase(px, py, panelW, panelH, "Baseline Calibration");
 
   textAlign(CENTER, TOP);
-  fill(UI_TEXT);
-  useUIFont(15);
-  text("Baseline Calibration - hold sensor steady", px + panelW / 2, py + 16);
-
   fill(UI_MUTED);
   useUIFont(12);
-  text(_bsCount + " / " + BASELINE_SAMPLES + " valid samples", px + panelW / 2, py + 38);
+  text("hold sensor steady", px + panelW / 2, py + 28);
+
+  fill(UI_TEXT);
+  useUIFont(12);
+  text(_bsCount + " / " + BASELINE_SAMPLES + " valid samples", px + panelW / 2, py + 48);
 
   int barX = px + 50;
   int barW = panelW - 100;
