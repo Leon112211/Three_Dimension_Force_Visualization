@@ -27,7 +27,7 @@ static final float FZ_SCALE   = 4.0;     // forceZ -> displacement multiplier
 static final float PG_FZ_REF  = 20.0;    // Fz (N) at which center saturates to full red; ≥ this stays red (clamped)
 
 // --- rotation state (free orbit; drag the panel to rotate) ---
-static final float PG_DEF_ROTX = 0.0;
+static final float PG_DEF_ROTX = -HALF_PI + 0.1;   // top-down view (default); drag to tilt into 3D
 static final float PG_DEF_ROTY = 0.0;
 float _pgRotX = PG_DEF_ROTX;
 float _pgRotY = PG_DEF_ROTY;
@@ -72,16 +72,17 @@ void drawPressureGrid() {
   // ---- begin offscreen render ----
   _pgGrid.beginDraw();
   _pgGrid.background(UI_PANEL);
-  _pgGrid.noLights();   // flat LED-dot look (no 3D shading)
+  _pgGrid.noLights();   // no lighting — keep pure force colors (depth via height)
 
   _pgGrid.translate(PG_GRID_W / 2, PG_GRID_H * 0.5, 0);
   _pgGrid.rotateX(_pgRotX);
   _pgGrid.rotateY(_pgRotY);
 
-  // === Dot-matrix pressure pad ===
-  // Rectangular base (GRID_N×GRID_N dots). Each dot is small + green at rest,
-  // and swells into a force-colored rounded rect under the circular Gaussian
-  // deformation. Max-size rects keep a gap so they never touch.
+  // === Dot-matrix pressure pad (3D) ===
+  // Rectangular base (GRID_N×GRID_N dots) on the XZ plane. Each dot is small +
+  // green at rest and swells into a force-colored rounded rect whose height
+  // follows the circular Gaussian deformation -> a 3D relief of dots (no
+  // continuous surface). Max-size rects keep a gap so they never touch.
   _pgGrid.noStroke();
   float minSize   = cellSize * 0.32;      // rest: small dot
   float maxSize   = cellSize * 0.82;      // max: rounded rect (leaves a gap)
@@ -97,7 +98,11 @@ void drawPressureGrid() {
       float size = lerp(minSize, maxSize, t);
       float cr   = min(size * 0.5, maxCorner);
       _pgGrid.fill(pgHeightColor(disp, refDisp));
-      _pgGrid.rect(wx - size / 2, wz - size / 2, size, size, cr);
+      _pgGrid.pushMatrix();
+      _pgGrid.translate(wx, disp, wz);       // height follows the circular Gaussian
+      _pgGrid.rotateX(HALF_PI);              // lay rounded rect flat on the XZ plane
+      _pgGrid.rect(-size / 2, -size / 2, size, size, cr);
+      _pgGrid.popMatrix();
     }
   }
 
