@@ -10,9 +10,9 @@ color UI_PANEL_HI = 0xFF1B2433;
 color UI_BORDER = 0xFF2B3A52;
 color UI_BORDER_ACTIVE = 0xFF4B83F6;
 color UI_GRID = 0xFF2D3442;
-color UI_TEXT = 0xFFE3E9F2;
-color UI_MUTED = 0xFF8791A3;
-color UI_DIM = 0xFF555D6E;
+color UI_TEXT = 0xFFFFFFFF;   // pure white (all on-screen text)
+color UI_MUTED = 0xFFFFFFFF;  // unified to white per request (was a muted gray)
+color UI_DIM = 0xFFFFFFFF;    // unified to white per request (was a dim gray)
 color UI_WARN = 0xFFE49A45;
 color UI_DANGER = 0xFFFF6D5E;
 color UI_GOOD = 0xFF4EE384;
@@ -26,9 +26,21 @@ PFont UI_FONT;
 PFont UI_MONO;
 
 void initTheme() {
-  UI_FONT = createFont("Segoe UI", 14, true);
-  UI_MONO = createFont("Cascadia Mono", 14, true);
+  // Bake glyphs at high resolution so text stays crisp at any size / on HiDPI.
+  // Orbitron / Space Mono ship as .ttf in the sketch data/ folder; fall back to
+  // system fonts if those files are ever missing.
+  UI_FONT = loadFontSafe("Orbitron.ttf", "Segoe UI");          // labels / titles
+  UI_MONO = loadFontSafe("SpaceMono-Regular.ttf", "Cascadia Mono");  // numeric readouts
   textFont(UI_FONT);
+}
+
+PFont loadFontSafe(String file, String fallbackName) {
+  try {
+    return createFont(file, 64, true);
+  } catch (Exception e) {
+    println("[Theme] Could not load " + file + " from data/; using " + fallbackName);
+    return createFont(fallbackName, 64, true);
+  }
 }
 
 void useUIFont(float size) {
@@ -99,4 +111,11 @@ void drawBadge(float x, float y, String label, color bg, color fg) {
   fill(fg);
   textAlign(CENTER, CENTER);
   text(label, x + w / 2, y + h / 2);
+}
+
+// Draw a badge and return the x just past its right edge (left-to-right flow layout).
+float drawBadgeFlow(float x, float y, String label, color bg, color fg) {
+  drawBadge(x, y, label, bg, fg);
+  useUIFont(11);
+  return x + textWidth(label) + 18;
 }

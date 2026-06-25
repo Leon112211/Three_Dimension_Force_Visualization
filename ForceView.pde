@@ -16,6 +16,8 @@
 // lower-right=+Y (forceY).  Model dirs: +X->-x, +Y->+z, +Z->+y.
 // ============================================================
 
+import processing.opengl.*;   // PGL — depth-buffer clear that keeps the resultant on top
+
 // --- 3D offscreen buffer ---
 PGraphics _pg3d;
 PImage _fvVignette;      // cached corner-darkening overlay (depth-safe, drawn on main canvas)
@@ -43,15 +45,16 @@ color FV_COL_Z = 0xFFFFA23D;
 color FV_COL_R = 0xFFFFF5B8;
 
 static final float FV_AXIS_LEN = 120;   // half-axis length in 3D units
+static final int   FV_SS = 1;           // 3D buffer supersample (1 = fast; 2 = sharper but ~4x the fill cost)
 
 // ============================================================
 void initForceView() {
-  _pg3d = createGraphics(PG_W, PG_H, P3D);
+  _pg3d = createGraphics(PG_W * FV_SS, PG_H * FV_SS, P3D);
   _pg3d.beginDraw();
   _pg3d.sphereDetail(18);   // set once; avoids per-frame cost
   _pg3d.endDraw();
   _fvVignette = makeFVVignette(PG_W, PG_H);
-  println("[ForceView] 3D buffer created (" + PG_W + "x" + PG_H + ")");
+  println("[ForceView] 3D buffer created (" + (PG_W * FV_SS) + "x" + (PG_H * FV_SS) + ", " + FV_SS + "x SS)");
 }
 
 // ============================================================
@@ -88,6 +91,7 @@ void draw3DPanel() {
   _pg3d.directionalLight(190, 210, 230, -0.5, -0.8, -0.4);
   _pg3d.directionalLight(60, 70, 90, 0.6, 0.4, 0.5);   // dim rim light for shape
 
+  _pg3d.scale(FV_SS);                  // supersample: draw in logical PG_W coords at SSx resolution
   _pg3d.translate(PG_W / 2, PG_H / 2, 0);
   _pg3d.rotateX(_fvRotX);
   _pg3d.rotateY(_fvRotY);
@@ -113,15 +117,15 @@ void draw3DPanel() {
   // --- resultant (hero) with glow + material ---
   drawFVResultant(rX, rY, rZ);
 
-  // capture screen positions of the positive axis tips BEFORE endDraw (for crisp labels)
-  float sxX = _pg3d.screenX(-axisLen, 0, 0), syX = _pg3d.screenY(-axisLen, 0, 0);
-  float sxY = _pg3d.screenX(0, 0, axisLen),  syY = _pg3d.screenY(0, 0, axisLen);
-  float sxZ = _pg3d.screenX(0, axisLen, 0),  syZ = _pg3d.screenY(0, axisLen, 0);
+  // capture screen positions of the positive axis tips BEFORE endDraw (buffer px -> design px)
+  float sxX = _pg3d.screenX(-axisLen, 0, 0) / FV_SS, syX = _pg3d.screenY(-axisLen, 0, 0) / FV_SS;
+  float sxY = _pg3d.screenX(0, 0, axisLen) / FV_SS,  syY = _pg3d.screenY(0, 0, axisLen) / FV_SS;
+  float sxZ = _pg3d.screenX(0, axisLen, 0) / FV_SS,  syZ = _pg3d.screenY(0, axisLen, 0) / FV_SS;
 
   _pg3d.endDraw();
 
-  // --- blit + corner vignette (depth-safe overlay) + frame ---
-  image(_pg3d, FV_3D_X, FV_3D_Y);
+  // --- blit (downscale the SSx buffer for AA) + corner vignette + frame ---
+  image(_pg3d, FV_3D_X, FV_3D_Y, PG_W, PG_H);
   image(_fvVignette, FV_3D_X, FV_3D_Y);
   drawPanelFrame(FV_3D_X, FV_3D_Y, PG_W, PG_H, "3D Force Vector");
 
@@ -194,25 +198,24 @@ void drawArrow3D(PGraphics pg, float x1, float y1, float z1,
 }
 
 // ============================================================
-// Resultant: soft glow (translucent BLEND) + lit solid hero
+// Resultant: lit solid hero, drawn ON TOP of the component arrows
 // ============================================================
 void drawFVResultant(float rX, float rY, float rZ) {
   float m = sqrt(rX*rX + rY*rY + rZ*rZ);
   if (m < 0.5) return;
 
-  // glow halo — stay on default BLEND (no ADD), so nothing leaks
-  _pg3d.noFill();
-  _pg3d.stroke(red(FV_COL_R), green(FV_COL_R), blue(FV_COL_R), 36);
-  _pg3d.strokeWeight(10);
-  _pg3d.line(0, 0, 0, rX, rY, rZ);
-  _pg3d.stroke(red(FV_COL_R), green(FV_COL_R), blue(FV_COL_R), 70);
-  _pg3d.strokeWeight(5);
-  _pg3d.line(0, 0, 0, rX, rY, rZ);
+  // The resultant often nearly coincides with a dominant axis arrow (e.g. when Fz
+  // dominates). Two solid arrows at the same depth depth-fight -> the flicker.
+  // Clear the depth buffer so the resultant draws on top of the component arrows
+  // and only depth-sorts against itself (its cone still self-occludes correctly).
+  PGL pgl = _pg3d.beginPGL();
+  pgl.clear(PGL.DEPTH_BUFFER_BIT);
+  _pg3d.endPGL();
 
-  // lit solid hero
+  // lit solid hero (emissive gives a self-lit pale glow without overlapping geometry)
   _pg3d.specular(255);
   _pg3d.shininess(28);
-  _pg3d.emissive(red(FV_COL_R) * 0.18, green(FV_COL_R) * 0.18, blue(FV_COL_R) * 0.18);
+  _pg3d.emissive(red(FV_COL_R) * 0.2, green(FV_COL_R) * 0.2, blue(FV_COL_R) * 0.2);
   drawArrow3D(_pg3d, 0, 0, 0, rX, rY, rZ, FV_COL_R, 3.5);
   _pg3d.emissive(0, 0, 0);
   _pg3d.specular(0, 0, 0);
@@ -265,7 +268,7 @@ void drawFVDropLines(float rX, float rY, float rZ, float L) {
   dashLine3D(_pg3d, rX, 0,  rZ, rX, rY, rZ, fvDim(FV_COL_Z), 4, 4);   // Fz (model y)
   // faint vertical shadow line to the floor for grounding
   dashLine3D(_pg3d, rX, rY, rZ, rX, L, rZ,
-             color(red(UI_DIM), green(UI_DIM), blue(UI_DIM), 60), 3, 5);
+             color(85, 93, 110, 60), 3, 5);
 }
 
 void dashLine3D(PGraphics pg, float ax, float ay, float az,
@@ -296,19 +299,24 @@ void drawFVLabel(String s, float sx, float sy, color c) {
   textAlign(LEFT, BASELINE);
 }
 
+// signed value, padded so positives align with negatives (digits/decimals line up)
+String fvFmt(float v) {
+  String s = nf(v, 1, 3);
+  return (s.charAt(0) == '-') ? s : " " + s;
+}
+
 void drawFVReadout(float fMag) {
   float x0 = FV_3D_X + 10;
   float y0 = FV_3D_Y + PG_H - 92;
-  noStroke();
-  fill(UI_PANEL, 200);
-  rect(x0, y0, 156, 82, 6);
 
   useMonoFont(11);
   textAlign(LEFT, TOP);
-  fill(FV_COL_X);  text("Fx " + nf(forceX, 1, 3), x0 + 8, y0 + 10);
-  fill(FV_COL_Y);  text("Fy " + nf(forceY, 1, 3), x0 + 8, y0 + 26);
-  fill(FV_COL_Z);  text("Fz " + nf(forceZ, 1, 3), x0 + 8, y0 + 42);
-  drawBadge(x0 + 8, y0 + 56, "|F| " + nf(fMag, 1, 3) + " N", UI_PANEL_HI, UI_RESULT);
+  float lx = x0 + 8;                  // label column
+  float vx = lx + textWidth("|F| ");  // value column — all numbers align past the widest label
+  fill(FV_COL_X);  text("Fx",  lx, y0 + 10);  text(fvFmt(forceX),      vx, y0 + 10);
+  fill(FV_COL_Y);  text("Fy",  lx, y0 + 26);  text(fvFmt(forceY),      vx, y0 + 26);
+  fill(FV_COL_Z);  text("Fz",  lx, y0 + 42);  text(fvFmt(forceZ),      vx, y0 + 42);
+  fill(UI_RESULT); text("|F|", lx, y0 + 58);  text(fvFmt(fMag) + " N", vx, y0 + 58);
   textAlign(LEFT, BASELINE);
 }
 
@@ -410,12 +418,6 @@ void drawBarChart() {
     textAlign(CENTER, TOP);
     text(names[i], bx + barW / 2, cy + ch - 22);
   }
-
-  // unit label
-  fill(UI_DIM);
-  useUIFont(10);
-  textAlign(CENTER, TOP);
-  text("Force (N)", cx + cw / 2, cy + ch - 6);
 
   // reset
   textAlign(LEFT, BASELINE);

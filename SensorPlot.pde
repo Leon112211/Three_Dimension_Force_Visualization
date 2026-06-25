@@ -5,14 +5,30 @@
 
 static final int SP_X = 450;
 static final int SP_Y = 630;
-static final int SP_W = 600;   // narrowed to make room for the Axis Ranges panel
+static final int SP_W = 610;   // widened into the space freed by compacting Axis Ranges
 static final int SP_H = 280;
 
-static final int PLOT_HISTORY = 300;
+static final int PLOT_HISTORY = 600;   // ring-buffer capacity (max points the slider can show)
 
 float[] _spBx, _spBy, _spBz;
 int _spHead = 0;
 int _spCount = 0;
+
+// --- display-count control (how many of the buffered points to draw) ---
+static final int SP_PTS_MIN = 50;
+static final int SP_PTS_MAX = 600;
+static final int SP_PTS_DEFAULT = 200;
+int spDisplayCount = SP_PTS_DEFAULT;
+boolean _spSliderDragging = false;
+
+// points slider (horizontal) + reset button, in the panel's bottom strip
+static final int SP_SLD_L = SP_X + 60;
+static final int SP_SLD_R = SP_X + 60 + 340;
+static final int SP_SLD_Y = SP_Y + SP_H - 12;
+static final int SP_RST_W = 58;
+static final int SP_RST_H = 18;
+static final int SP_RST_X = SP_X + SP_W - SP_RST_W - 12;
+static final int SP_RST_Y = SP_Y + SP_H - 22;
 
 color SP_COL_BX = 0xFF5A92FF;
 color SP_COL_BY = 0xFF66E07D;
@@ -45,12 +61,15 @@ void drawPlot() {
 
   drawPanelBase(SP_X, SP_Y, SP_W, SP_H, "Magnetic Delta Waveform");
 
+  int shown = min(spDisplayCount, _spCount);   // draw only the last N points
+  int startAge = _spCount - shown;
+
   float yMin = Float.MAX_VALUE;
   float yMax = -Float.MAX_VALUE;
   int finiteCount = 0;
 
-  for (int i = 0; i < _spCount; i++) {
-    int idx = ringIndex(i);
+  for (int k = 0; k < shown; k++) {
+    int idx = ringIndex(startAge + k);
     if (!areFiniteValues(_spBx[idx], _spBy[idx], _spBz[idx])) continue;
 
     float bx = plotDelta(_spBx[idx], baselineX);
@@ -102,9 +121,9 @@ void drawPlot() {
 
   noFill();
   strokeWeight(1.7);
-  drawWaveLine(_spBx, baselineX, SP_COL_BX, cLeft, cRight, cTop, cBottom, yMin, yMax);
-  drawWaveLine(_spBy, baselineY, SP_COL_BY, cLeft, cRight, cTop, cBottom, yMin, yMax);
-  drawWaveLine(_spBz, baselineZ, SP_COL_BZ, cLeft, cRight, cTop, cBottom, yMin, yMax);
+  drawWaveLine(_spBx, baselineX, SP_COL_BX, cLeft, cRight, cTop, cBottom, yMin, yMax, startAge, shown);
+  drawWaveLine(_spBy, baselineY, SP_COL_BY, cLeft, cRight, cTop, cBottom, yMin, yMax, startAge, shown);
+  drawWaveLine(_spBz, baselineZ, SP_COL_BZ, cLeft, cRight, cTop, cBottom, yMin, yMax, startAge, shown);
   noStroke();
 
   int legX = cLeft + 8;
@@ -115,19 +134,18 @@ void drawPlot() {
   fill(SP_COL_BX);
   text("dBx " + nf(sensorBx - baselineX, 1, 2), legX, legY);
   fill(SP_COL_BY);
-  text("dBy " + nf(sensorBy - baselineY, 1, 2), legX + 140, legY);
+  text("dBy " + nf(sensorBy - baselineY, 1, 2), legX + 160, legY);
   fill(SP_COL_BZ);
-  text("dBz " + nf(sensorBz - baselineZ, 1, 2), legX + 280, legY);
+  text("dBz " + nf(sensorBz - baselineZ, 1, 2), legX + 320, legY);
 
   fill(UI_DIM);
   useUIFont(9);
   textAlign(LEFT, TOP);
   text("uT", SP_X + 14, cTop);
 
-  fill(UI_DIM);
-  useUIFont(10);
-  textAlign(CENTER, TOP);
-  text("last " + _spCount + " valid frames", SP_X + SP_W / 2, SP_Y + SP_H - 18);
+  // points control: horizontal slider (display count) + reset
+  drawPlotSlider();
+  drawPlotReset(isPlotResetHit(uiMouseX(), uiMouseY()));
 
   textAlign(LEFT, BASELINE);
   useUIFont(14);
@@ -139,12 +157,12 @@ float plotDelta(float value, float baseline) {
 }
 
 void drawWaveLine(float[] buf, float baseline, color col, int cL, int cR, int cT, int cB,
-                  float yMin, float yMax) {
+                  float yMin, float yMax, int startAge, int shown) {
   stroke(col);
   boolean drawing = false;
 
-  for (int i = 0; i < _spCount; i++) {
-    int idx = ringIndex(i);
+  for (int k = 0; k < shown; k++) {
+    int idx = ringIndex(startAge + k);
     float value = plotDelta(buf[idx], baseline);
 
     if (!isFiniteValue(value)) {
@@ -160,7 +178,7 @@ void drawWaveLine(float[] buf, float baseline, color col, int cL, int cR, int cT
       drawing = true;
     }
 
-    float xPos = map(i, 0, _spCount - 1, cL, cR);
+    float xPos = map(k, 0, shown - 1, cL, cR);
     float yPos = map(value, yMin, yMax, cB, cT);
     vertex(xPos, yPos);
   }
@@ -170,4 +188,62 @@ void drawWaveLine(float[] buf, float baseline, color col, int cL, int cR, int cT
 
 int ringIndex(int sampleAge) {
   return (_spHead - _spCount + sampleAge + PLOT_HISTORY) % PLOT_HISTORY;
+}
+
+// ============================================================
+// Points control — horizontal slider (display count) + reset
+// ============================================================
+void drawPlotSlider() {
+  noStroke();
+  fill(UI_PANEL_HI);
+  rect(SP_SLD_L, SP_SLD_Y - 2.5, SP_SLD_R - SP_SLD_L, 5, 3);
+
+  float frac = constrain((spDisplayCount - SP_PTS_MIN) / (float)(SP_PTS_MAX - SP_PTS_MIN), 0, 1);
+  float hx = SP_SLD_L + frac * (SP_SLD_R - SP_SLD_L);
+  boolean hover = isPlotSliderHit(uiMouseX(), uiMouseY()) || _spSliderDragging;
+  fill(hover ? UI_BORDER_ACTIVE : UI_TEXT);
+  ellipse(hx, SP_SLD_Y, 13, 13);
+
+  fill(UI_MUTED);
+  useMonoFont(10);
+  textAlign(LEFT, CENTER);
+  text(spDisplayCount + " pts", SP_SLD_R + 14, SP_SLD_Y + 1);
+  textAlign(LEFT, BASELINE);
+  useUIFont(14);
+}
+
+boolean isPlotSliderHit(float mx, float my) {
+  return mx >= SP_SLD_L - 8 && mx <= SP_SLD_R + 8 &&
+         my >= SP_SLD_Y - 10 && my <= SP_SLD_Y + 10;
+}
+
+void updatePlotSlider() {
+  float frac = constrain((uiMouseX() - SP_SLD_L) / (float)(SP_SLD_R - SP_SLD_L), 0, 1);
+  spDisplayCount = round(lerp(SP_PTS_MIN, SP_PTS_MAX, frac));
+}
+
+void endPlotSliderDrag() {
+  _spSliderDragging = false;
+}
+
+void resetPlotPoints() {
+  spDisplayCount = SP_PTS_DEFAULT;
+}
+
+boolean isPlotResetHit(float mx, float my) {
+  return mx >= SP_RST_X && mx <= SP_RST_X + SP_RST_W &&
+         my >= SP_RST_Y && my <= SP_RST_Y + SP_RST_H;
+}
+
+void drawPlotReset(boolean hover) {
+  noStroke();
+  fill(hover ? UI_BORDER_ACTIVE : UI_PANEL_HI);
+  rect(SP_RST_X, SP_RST_Y, SP_RST_W, SP_RST_H, 5);
+  fill(UI_TEXT);
+  useUIFont(11);
+  textAlign(CENTER, CENTER);
+  text("Reset", SP_RST_X + SP_RST_W / 2.0, SP_RST_Y + SP_RST_H / 2.0 + 1);
+  textAlign(LEFT, BASELINE);
+  useUIFont(14);
+  noStroke();
 }

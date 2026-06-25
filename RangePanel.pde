@@ -23,7 +23,7 @@ boolean rangeXYLocked = true;
 static final float RANGE_MIN = 0.2;
 static final float RANGE_MAX = 50.0;
 
-// --- panel layout (bottom row, right of the waveform) ---
+// --- panel layout (compact, bottom-right) ---
 static final int RP_X = 1080;
 static final int RP_Y = 630;
 static final int RP_W = 240;
@@ -35,11 +35,17 @@ static final int RP_LOCK_H = 22;
 static final int RP_LOCK_X = RP_X + RP_W - RP_LOCK_W - 12;
 static final int RP_LOCK_Y = RP_Y + 8;
 
+// Reset button (bottom-center)
+static final int RP_RST_W = 80;
+static final int RP_RST_H = 20;
+static final int RP_RST_X = RP_X + (RP_W - RP_RST_W) / 2;
+static final int RP_RST_Y = RP_Y + RP_H - 26;
+
 // slider tracks
 static final int RP_TRACK_TOP = RP_Y + 64;
-static final int RP_TRACK_BOT = RP_Y + RP_H - 44;
+static final int RP_TRACK_BOT = RP_Y + RP_H - 62;
 static final int RP_TRACK_W   = 6;
-int[] _rpColX = { RP_X + 50, RP_X + 120, RP_X + 190 };   // column centers (X, Y, Z)
+int[] _rpColX = { RP_X + 50, RP_X + 120, RP_X + 190 };   // compact column centers (X, Y, Z)
 
 int _rangeDragging = -1;   // 0=X, 1=Y, 2=Z, -1=none
 
@@ -58,6 +64,7 @@ void drawRangePanel() {
   drawPanelBase(RP_X, RP_Y, RP_W, RP_H, "Axis Ranges");
 
   drawRangeLockButton(isRangeLockHit(uiMouseX(), uiMouseY()));
+  drawRangeReset(isRangeResetHit(uiMouseX(), uiMouseY()));
 
   String[] labels = { "X", "Y", "Z" };
   color[]  cols   = { UI_X, UI_Y, UI_Z };
@@ -170,6 +177,35 @@ void drawRangeLockButton(boolean hover) {
   textAlign(CENTER, CENTER);
   text(rangeXYLocked ? "XY Lock" : "XY Free",
        RP_LOCK_X + RP_LOCK_W / 2.0, RP_LOCK_Y + RP_LOCK_H / 2.0 + 1);
+  textAlign(LEFT, BASELINE);
+  useUIFont(14);
+  noStroke();
+}
+
+// ============================================================
+// Reset button — restore default ranges (X=5, Y=5, Z=20, XY locked)
+// ============================================================
+boolean isRangeResetHit(float mx, float my) {
+  return mx >= RP_RST_X && mx <= RP_RST_X + RP_RST_W &&
+         my >= RP_RST_Y && my <= RP_RST_Y + RP_RST_H;
+}
+
+void resetRanges() {
+  rangeX = 5.0;
+  rangeY = 5.0;
+  rangeZ = 20.0;
+  rangeXYLocked = true;
+  println("[RangePanel] Ranges reset to defaults.");
+}
+
+void drawRangeReset(boolean hover) {
+  noStroke();
+  fill(hover ? UI_BORDER_ACTIVE : UI_PANEL_HI);
+  rect(RP_RST_X, RP_RST_Y, RP_RST_W, RP_RST_H, 5);
+  fill(UI_TEXT);
+  useUIFont(11);
+  textAlign(CENTER, CENTER);
+  text("Reset", RP_RST_X + RP_RST_W / 2.0, RP_RST_Y + RP_RST_H / 2.0 + 1);
   textAlign(LEFT, BASELINE);
   useUIFont(14);
   noStroke();

@@ -154,12 +154,12 @@ void drawCompass(float fx, float fy) {
 
   // magnitude
   fill(UI_TEXT);
-  text("|Fxy| = " + nf(fxy, 1, 3) + " N", TC_X + 6, TC_Y + TC_SIZE - 20);
+  text("|Fxy| " + nf(fxy, 1, 3) + " N", TC_X + 18, TC_Y + TC_SIZE - 30);
 
   // angle (degrees)
   float angleDeg = degrees(theta);
   if (angleDeg < 0) angleDeg += 360;
-  text("Angle = " + nf(angleDeg, 1, 1) + " deg", TC_X + 6, TC_Y + TC_SIZE - 6);
+  text("Angle " + nf(angleDeg, 1, 1) + " deg", TC_X + 18, TC_Y + TC_SIZE - 16);
 
   // reset state
   textAlign(LEFT, BASELINE);

@@ -18,6 +18,7 @@ static final int PG_GRID_W = 450;
 static final int PG_GRID_H = 400;
 static final int PG_GRID_X = 870;
 static final int PG_GRID_Y = 210;
+static final int PG_SS     = 1;     // pressure buffer supersample (1 = fast; 2 = sharper, ~4x fill cost)
 
 // --- mesh parameters ---
 static final int   GRID_N     = 30;      // NxN vertices
@@ -41,8 +42,8 @@ static final int PG_RST_Y = PG_GRID_Y + 5;
 
 // ============================================================
 void initPressureGrid() {
-  _pgGrid = createGraphics(PG_GRID_W, PG_GRID_H, P3D);
-  println("[PressureGrid] Buffer created (" + PG_GRID_W + "x" + PG_GRID_H + ")");
+  _pgGrid = createGraphics(PG_GRID_W * PG_SS, PG_GRID_H * PG_SS, P3D);
+  println("[PressureGrid] Buffer created (" + (PG_GRID_W * PG_SS) + "x" + (PG_GRID_H * PG_SS) + ", " + PG_SS + "x SS)");
 }
 
 // ============================================================
@@ -64,6 +65,7 @@ void drawPressureGrid() {
   _pgGrid.background(UI_PANEL);
   _pgGrid.noLights();   // no lighting — keep pure force colors (depth via height)
 
+  _pgGrid.scale(PG_SS);              // supersample: draw in logical coords at SSx resolution
   _pgGrid.translate(PG_GRID_W / 2, PG_GRID_H * 0.5, 0);
   _pgGrid.rotateX(_pgRotX);
   _pgGrid.rotateY(_pgRotY);
@@ -73,10 +75,14 @@ void drawPressureGrid() {
   // green at rest and swells into a force-colored rounded rect whose height
   // follows the circular Gaussian deformation -> a 3D relief of dots (no
   // continuous surface). Max-size rects keep a gap so they never touch.
+  // Performance: batch ALL dots into ONE shape (flat square quads on the XZ plane).
+  // The old version drew 900 rounded rects, each with its own pushMatrix/rotate ->
+  // ~27k tessellated triangles in 900 CPU draw batches every frame. One QUADS shape
+  // with per-quad color is a small fraction of that (this is the real FPS fix).
   _pgGrid.noStroke();
-  float minSize   = cellSize * 0.32;      // rest: small dot
-  float maxSize   = cellSize * 0.82;      // max: rounded rect (leaves a gap)
-  float maxCorner = cellSize * 0.28;      // caps corner radius -> rounded square
+  float minSize = cellSize * 0.32;
+  float maxSize = cellSize * 0.82;
+  _pgGrid.beginShape(QUADS);
   for (int i = 0; i < GRID_N; i++) {
     for (int j = 0; j < GRID_N; j++) {
       float wx = (i + 0.5) * cellSize - halfGrid;
@@ -85,21 +91,20 @@ void drawPressureGrid() {
       float dz = (j + 0.5) - cz;
       float disp = centerDisp * exp(-(dx * dx + dz * dz) / sig2);
       float t = constrain(abs(disp) / refDisp, 0, 1);
-      float size = lerp(minSize, maxSize, t);
-      float cr   = min(size * 0.5, maxCorner);
-      _pgGrid.fill(pgHeightColor(disp, refDisp));
-      _pgGrid.pushMatrix();
-      _pgGrid.translate(wx, disp, wz);       // height follows the circular Gaussian
-      _pgGrid.rotateX(HALF_PI);              // lay rounded rect flat on the XZ plane
-      _pgGrid.rect(-size / 2, -size / 2, size, size, cr);
-      _pgGrid.popMatrix();
+      float h = lerp(minSize, maxSize, t) * 0.5;   // half edge
+      _pgGrid.fill(pgHeightColor(disp, refDisp));   // per-quad color
+      _pgGrid.vertex(wx - h, disp, wz - h);
+      _pgGrid.vertex(wx + h, disp, wz - h);
+      _pgGrid.vertex(wx + h, disp, wz + h);
+      _pgGrid.vertex(wx - h, disp, wz + h);
     }
   }
+  _pgGrid.endShape();
 
   _pgGrid.endDraw();
 
   // ---- blit to main canvas ----
-  image(_pgGrid, PG_GRID_X, PG_GRID_Y);
+  image(_pgGrid, PG_GRID_X, PG_GRID_Y, PG_GRID_W, PG_GRID_H);
 
   drawPanelFrame(PG_GRID_X, PG_GRID_Y, PG_GRID_W, PG_GRID_H, "Z-Axis Pressure");
   drawResetViewButton(isResetViewButtonHit(uiMouseX(), uiMouseY()));

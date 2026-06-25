@@ -36,6 +36,8 @@ void settings() {
   }
   startupScale = min(startupScale, MAX_UI_SCALE);
   size(round(DESIGN_W * startupScale), round(DESIGN_H * startupScale), P2D);
+  pixelDensity(displayDensity());   // render at the display's native density (HiDPI / retina / 4K)
+  smooth(2);                        // light antialiasing (2x MSAA; 4x looked nicer but is heavy on iGPUs)
 }
 
 void setup() {
@@ -143,17 +145,22 @@ void drawTopHUD(float dVx, float dVy, float dVz) {
   fill(UI_TEXT);
   text("TDF Visual", x + 16, y + 30);
 
-  drawBadge(x + 128, y + 29, SENSOR_NAMES[activeSensor], UI_PANEL_HI, UI_TEXT);
-  drawBadge(x + 176, y + 29, newDataAvailable ? "LIVE" : "HOLD",
-            newDataAvailable ? color(36, 92, 62) : color(64, 68, 78),
-            newDataAvailable ? UI_GOOD : UI_MUTED);
+  // Badges flow left-to-right after the title (adapts to the title's actual width).
+  float by = y + 29;
+  float bx = x + 16 + textWidth("TDF Visual") + 16;
+  bx = drawBadgeFlow(bx, by, SENSOR_NAMES[activeSensor], UI_PANEL_HI, UI_TEXT) + 8;
+  bx = drawBadgeFlow(bx, by, newDataAvailable ? "LIVE" : "HOLD",
+                     newDataAvailable ? color(36, 92, 62) : color(64, 68, 78),
+                     newDataAvailable ? UI_GOOD : UI_MUTED) + 8;
   if (receiverBadFrameCount() > 0) {
-    drawBadge(x + 232, y + 29, "BAD " + receiverBadFrameCount(),
-              color(78, 51, 28), UI_WARN);
+    drawBadgeFlow(bx, by, "BAD " + receiverBadFrameCount(), color(78, 51, 28), UI_WARN);
   }
 
   // Calibration button (top-right) — click to recalibrate baseline
   drawCalibrationButton(isCalibrationButtonHit(uiMouseX(), uiMouseY()));
+
+  // FPS readout (left of the Calibration button)
+  drawFpsReadout();
 
   int baseX0 = x + 18;       // Baseline (first column)
   int magX = x + 240;        // Magnetic delta
@@ -216,6 +223,30 @@ void drawCalibrationButton(boolean hover) {
   noStroke();
 }
 
+// --- FPS readout (top-right of the Sensor State panel, left of Calibration) ---
+void drawFpsReadout() {
+  float fps = frameRate;   // Processing's built-in smoothed frame rate
+  color c = fps >= 50 ? UI_GOOD : (fps >= 30 ? UI_WARN : UI_DANGER);
+  int fw = 96;
+  int fh = CAL_BTN_H;
+  int fx = CAL_BTN_X - fw - 14;
+  int fy = CAL_BTN_Y;
+  noStroke();
+  fill(UI_PANEL_HI);
+  rect(fx, fy, fw, fh, 6);
+  fill(UI_MUTED);
+  useUIFont(10);
+  textAlign(LEFT, CENTER);
+  text("FPS", fx + 10, fy + fh / 2.0 + 1);
+  fill(c);
+  useMonoFont(15);
+  textAlign(RIGHT, CENTER);
+  text(nf(fps, 1, 1), fx + fw - 10, fy + fh / 2.0 + 1);
+  textAlign(LEFT, BASELINE);
+  useUIFont(14);
+  noStroke();
+}
+
 // ============================================================
 // Input handlers
 // ============================================================
@@ -235,6 +266,7 @@ void keyPressed() {
 void mouseDragged() {
   updateUILayout();
   if (_rangeDragging >= 0) { updateRangeSlider(_rangeDragging); return; }   // axis range sliders
+  if (_spSliderDragging) { updatePlotSlider(); return; }                    // waveform points slider
   if (!_pgDragging) handleFVDrag();   // skip ForceView while orbiting the pressure grid
   handlePGDrag();
 }
@@ -242,6 +274,7 @@ void mouseDragged() {
 void mouseReleased() {
   endPGDrag();
   endRangeDrag();
+  endPlotSliderDrag();
 }
 
 void mousePressed() {
@@ -266,6 +299,18 @@ void mousePressed() {
   }
   if (isRangeLockHit(mx, my)) {         // XY lock toggle
     toggleRangeLock();
+    return;
+  }
+  if (isRangeResetHit(mx, my)) {        // axis-ranges reset
+    resetRanges();
+    return;
+  }
+  if (isPlotSliderHit(mx, my)) {        // waveform points slider
+    _spSliderDragging = true;
+    return;
+  }
+  if (isPlotResetHit(mx, my)) {         // waveform points reset
+    resetPlotPoints();
     return;
   }
   startPGDrag(mx, my);              // begin free orbit if press is in the pressure panel
