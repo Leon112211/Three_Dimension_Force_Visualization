@@ -51,6 +51,7 @@ void setup() {
   initPressureGrid(); // PressureGrid.pde — Z-axis pressure surface
   initCompass();      // TangentialCompass.pde — XY force compass
   initPlot();         // SensorPlot.pde  — real-time Bx/By/Bz waveform
+  initRangePanel();   // RangePanel.pde  — global X/Y/Z display ranges
   initBaseline();     // Baseline.pde   — begin 300-sample calibration
 }
 
@@ -120,6 +121,9 @@ void draw() {
 
   // --- real-time sensor waveform ---
   drawPlot();
+
+  // --- global X/Y/Z display ranges ---
+  drawRangePanel();
 
   // --- always-visible matrix overlay (on top of everything) ---
   drawMatrixHUD();
@@ -230,18 +234,14 @@ void keyPressed() {
 
 void mouseDragged() {
   updateUILayout();
-  if (_tcRefDragging) { updateCompassSlider(); return; }   // compass threshold slider
-  if (_pgRefDragging) { updateRefSlider(); return; }       // pressure threshold slider
-  if (_fvRefDragging) { updateFVRefSlider(); return; }     // force-view scale slider
+  if (_rangeDragging >= 0) { updateRangeSlider(_rangeDragging); return; }   // axis range sliders
   if (!_pgDragging) handleFVDrag();   // skip ForceView while orbiting the pressure grid
   handlePGDrag();
 }
 
 void mouseReleased() {
   endPGDrag();
-  endRefSliderDrag();
-  endCompassSliderDrag();
-  endFVRefSliderDrag();
+  endRangeDrag();
 }
 
 void mousePressed() {
@@ -259,16 +259,13 @@ void mousePressed() {
     resetPGView();
     return;
   }
-  if (isRefSliderHit(mx, my)) {         // pressure-grid threshold slider
-    _pgRefDragging = true;
+  int rsi = rangeSliderHit(mx, my);     // axis-range sliders (X/Y/Z)
+  if (rsi >= 0) {
+    _rangeDragging = rsi;
     return;
   }
-  if (isCompassSliderHit(mx, my)) {     // compass threshold slider
-    _tcRefDragging = true;
-    return;
-  }
-  if (isFVRefSliderHit(mx, my)) {       // force-view scale slider
-    _fvRefDragging = true;
+  if (isRangeLockHit(mx, my)) {         // XY lock toggle
+    toggleRangeLock();
     return;
   }
   startPGDrag(mx, my);              // begin free orbit if press is in the pressure panel

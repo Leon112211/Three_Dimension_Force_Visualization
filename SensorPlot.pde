@@ -5,7 +5,7 @@
 
 static final int SP_X = 450;
 static final int SP_Y = 630;
-static final int SP_W = 870;
+static final int SP_W = 600;   // narrowed to make room for the Axis Ranges panel
 static final int SP_H = 280;
 
 static final int PLOT_HISTORY = 300;

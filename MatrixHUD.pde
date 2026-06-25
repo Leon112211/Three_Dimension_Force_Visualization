@@ -21,19 +21,7 @@ static final int MX_TOG_X = MX_PX + MX_PANEL_W - MX_TOG_W - 16;
 static final int MX_TOG_Y = MX_TAB_Y;
 
 void drawMatrixHUD() {
-  noStroke();
-  fill(0, 0, 0, 80);
-  rect(MX_PX + 2, MX_PY + 3, MX_PANEL_W, MX_PANEL_H, 8);
-  fill(UI_PANEL, 238);
-  rect(MX_PX, MX_PY, MX_PANEL_W, MX_PANEL_H, 8);
-
-  stroke(UI_BORDER_ACTIVE, 180);
-  strokeWeight(1);
-  noFill();
-  rect(MX_PX + 0.5, MX_PY + 0.5, MX_PANEL_W - 1, MX_PANEL_H - 1, 8);
-  noStroke();
-
-  drawPanelTitle(MX_PX, MX_PY, _showDecoupling ? "D (N/uT)" : "S (uT/N)");
+  drawPanelBase(MX_PX, MX_PY, MX_PANEL_W, MX_PANEL_H, _showDecoupling ? "D (N/uT)" : "S (uT/N)");
 
   // sensor tabs (clickable) + S/D toggle (clickable) — see handleMatrixMousePress
   float mx = uiMouseX();

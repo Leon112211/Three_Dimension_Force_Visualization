@@ -161,9 +161,10 @@ void selectSensor(int index) {
 // ============================================================
 void computeForce(float dVx, float dVy, float dVz) {
   float[][] D = D_ALL[activeSensor];
-  forceX = D[0][0] * dVx + D[0][1] * dVy + D[0][2] * dVz;
-  forceY = D[1][0] * dVx + D[1][1] * dVy + D[1][2] * dVz;
-  forceZ = D[2][0] * dVx + D[2][1] * dVy + D[2][2] * dVz;
+  forceX = D[0][0] * dVx + D[0][1] * dVy + D[0][2] * dVz;   // X keeps its sign
+  forceY = D[1][0] * dVx + D[1][1] * dVy + D[1][2] * dVz;   // Y keeps its sign
+  // Z is compression-only: clamp negative Z force to 0.
+  forceZ = max(0, D[2][0] * dVx + D[2][1] * dVy + D[2][2] * dVz);
 }
 
 // ============================================================

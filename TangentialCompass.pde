@@ -18,16 +18,6 @@ static final int TC_SIZE = 280;      // panel height (row 3)
 static final float TC_R = 105.0;     // gauge circle radius (px)
 static final float TC_FXY_REF = 5.0; // Fxy at which arrow reaches full length (N)
 
-// --- Threshold slider (user-adjustable XY force scale, N) ---
-static final float TC_REF_MIN = 0.5;
-static final float TC_REF_MAX = 50.0;
-float tcFxyRef = TC_FXY_REF;          // current threshold (init = default 5 N)
-boolean _tcRefDragging = false;
-static final int TC_REF_TRACK_X = TC_X + TC_W - 40;   // vertical track (right side)
-static final int TC_REF_TRACK_TOP = TC_Y + 50;
-static final int TC_REF_TRACK_BOT = TC_Y + TC_SIZE - 40;
-static final int TC_REF_TRACK_W = 6;                  // track thickness
-
 // --- needle damping state (smooths twitch only; raw values still used for readouts) ---
 float _tcFxySm = 0;                           // EMA-smoothed |Fxy|
 float _tcThetaSm = 0;                         // smoothed needle angle (shortest-path lerp)
@@ -94,8 +84,9 @@ void drawCompass(float fx, float fy) {
 
   // --- draw center-pivot arrow if force is non-trivial ---
   if (_tcFxySm > 0.001) {
-    // normalized magnitude (0..1, clamped) from the smoothed value
-    float t = constrain(_tcFxySm / tcFxyRef, 0, 1);
+    // normalized magnitude (0..1, clamped) from the smoothed value;
+    // full-scale = combined XY range (keeps the needle's true direction)
+    float t = constrain(_tcFxySm / rangeXY(), 0, 1);
 
     // symmetric half-length: both sides equal, max reaches circle edge
     float halfLen  = t * TC_R;
@@ -170,8 +161,6 @@ void drawCompass(float fx, float fy) {
   if (angleDeg < 0) angleDeg += 360;
   text("Angle = " + nf(angleDeg, 1, 1) + " deg", TC_X + 6, TC_Y + TC_SIZE - 6);
 
-  drawCompassSlider();
-
   // reset state
   textAlign(LEFT, BASELINE);
   useUIFont(14);
@@ -194,50 +183,4 @@ color tcForceColor(float t) {
   return c;
 }
 
-// ============================================================
-// Threshold slider — user sets the XY force scale (N).
-// Drag the track/handle to change tcFxyRef (force at which the arrow maxes).
-// ============================================================
-boolean isCompassSliderHit(float mx, float my) {
-  return mx >= TC_REF_TRACK_X - 8 && mx <= TC_REF_TRACK_X + TC_REF_TRACK_W + 8 &&
-         my >= TC_REF_TRACK_TOP - 10 && my <= TC_REF_TRACK_BOT + 10;
-}
-
-void updateCompassSlider() {
-  float frac = constrain((TC_REF_TRACK_BOT - uiMouseY()) /
-                         (float)(TC_REF_TRACK_BOT - TC_REF_TRACK_TOP), 0, 1);
-  tcFxyRef = lerp(TC_REF_MIN, TC_REF_MAX, frac);   // up = larger threshold
-}
-
-void endCompassSliderDrag() {
-  _tcRefDragging = false;
-}
-
-void drawCompassSlider() {
-  float cx = TC_REF_TRACK_X + TC_REF_TRACK_W / 2.0;
-  float trackH = TC_REF_TRACK_BOT - TC_REF_TRACK_TOP;
-
-  fill(UI_MUTED);
-  useUIFont(11);
-  textAlign(CENTER, BASELINE);
-  text("Threshold", cx, TC_REF_TRACK_TOP - 8);
-
-  fill(UI_TEXT);
-  useMonoFont(10);
-  textAlign(CENTER, TOP);
-  text(nf(tcFxyRef, 1, 1) + "N", cx, TC_REF_TRACK_BOT + 8);
-
-  noStroke();
-  fill(UI_PANEL_HI);
-  rect(TC_REF_TRACK_X, TC_REF_TRACK_TOP, TC_REF_TRACK_W, trackH, 3);
-
-  float frac = constrain((tcFxyRef - TC_REF_MIN) / (TC_REF_MAX - TC_REF_MIN), 0, 1);
-  float hy = TC_REF_TRACK_BOT - frac * trackH;
-  boolean hover = isCompassSliderHit(uiMouseX(), uiMouseY()) || _tcRefDragging;
-  fill(hover ? UI_BORDER_ACTIVE : UI_TEXT);
-  ellipse(cx, hy, 14, 14);
-
-  textAlign(LEFT, BASELINE);
-  useUIFont(14);
-  noStroke();
-}
+// (XY force scale moved to the global RangePanel — uses the combined XY range)

@@ -27,7 +27,7 @@ static final float FZ_SCALE   = 4.0;     // forceZ -> displacement multiplier
 static final float PG_FZ_REF  = 20.0;    // Fz (N) at which center saturates to full red; ≥ this stays red (clamped)
 
 // --- rotation state (free orbit; drag the panel to rotate) ---
-static final float PG_DEF_ROTX = -HALF_PI + 0.1;   // top-down view (default); drag to tilt into 3D
+static final float PG_DEF_ROTX = -HALF_PI;   // exact top-down view (default); drag to tilt into 3D
 static final float PG_DEF_ROTY = 0.0;
 float _pgRotX = PG_DEF_ROTX;
 float _pgRotY = PG_DEF_ROTY;
@@ -38,16 +38,6 @@ static final int PG_RST_W = 70;
 static final int PG_RST_H = 22;
 static final int PG_RST_X = PG_GRID_X + PG_GRID_W - PG_RST_W - 10;
 static final int PG_RST_Y = PG_GRID_Y + 5;
-
-// --- Deformation-threshold slider (user-adjustable saturation force, N) ---
-static final float PG_REF_MIN = 1.0;
-static final float PG_REF_MAX = 100.0;
-float pgFzRef = PG_FZ_REF;          // current threshold (init = default 20 N)
-boolean _pgRefDragging = false;
-static final int PG_REF_TRACK_X = PG_GRID_X + PG_GRID_W - 40;   // vertical track x (right side)
-static final int PG_REF_TRACK_TOP = PG_GRID_Y + 70;
-static final int PG_REF_TRACK_BOT = PG_GRID_Y + PG_GRID_H - 40;
-static final int PG_REF_TRACK_W = 6;                            // track thickness
 
 // ============================================================
 void initPressureGrid() {
@@ -64,7 +54,7 @@ void drawPressureGrid() {
   float centerDisp = forceZ * FZ_SCALE;    // positive Fz = push down
 
   // --- dot-matrix references (color + size scale with local force) ---
-  float refDisp = FZ_SCALE * pgFzRef;    // user-adjustable saturation threshold
+  float refDisp = FZ_SCALE * rangeZ;     // saturation threshold = global Z range
   float cx = GRID_N / 2.0;
   float cz = GRID_N / 2.0;
   float sig2 = 2.0 * PG_SIGMA * PG_SIGMA;
@@ -119,13 +109,11 @@ void drawPressureGrid() {
   text("Fz " + nf(forceZ, 1, 3) + " N", PG_GRID_X + PG_GRID_W - 14, PG_GRID_Y + 32);
   textAlign(LEFT, BASELINE);
   useUIFont(14);
-
-  drawRefSlider();
 }
 
 // ============================================================
 // Color mapping: force gradient — green (rest) → red (max).
-//   t = |displacement| / (FZ_SCALE * pgFzRef)   <- pgFzRef set by the slider
+//   t = |displacement| / (FZ_SCALE * rangeZ)   <- rangeZ from the Axis Ranges panel
 //   t=0   -> green    (no force / rest dot)
 //   t=0.5 -> yellow
 //   t=1   -> red      (full-scale force)
@@ -191,53 +179,4 @@ void resetPGView() {
   _pgRotY = PG_DEF_ROTY;
 }
 
-// ============================================================
-// Deformation-threshold slider — user sets the saturation force (N).
-// Drag the track/handle to change pgFzRef (force at which color/size max out).
-// ============================================================
-boolean isRefSliderHit(float mx, float my) {
-  return mx >= PG_REF_TRACK_X - 8 && mx <= PG_REF_TRACK_X + PG_REF_TRACK_W + 8 &&
-         my >= PG_REF_TRACK_TOP - 10 && my <= PG_REF_TRACK_BOT + 10;
-}
-
-void updateRefSlider() {
-  float frac = constrain((PG_REF_TRACK_BOT - uiMouseY()) /
-                         (float)(PG_REF_TRACK_BOT - PG_REF_TRACK_TOP), 0, 1);
-  pgFzRef = lerp(PG_REF_MIN, PG_REF_MAX, frac);   // up = larger threshold
-}
-
-void endRefSliderDrag() {
-  _pgRefDragging = false;
-}
-
-void drawRefSlider() {
-  float cx = PG_REF_TRACK_X + PG_REF_TRACK_W / 2.0;
-  float trackH = PG_REF_TRACK_BOT - PG_REF_TRACK_TOP;
-
-  // label above, value below
-  fill(UI_MUTED);
-  useUIFont(11);
-  textAlign(CENTER, BASELINE);
-  text("Threshold", cx, PG_REF_TRACK_TOP - 8);
-
-  fill(UI_TEXT);
-  useMonoFont(10);
-  textAlign(CENTER, TOP);
-  text(nf(pgFzRef, 1, 1) + "N", cx, PG_REF_TRACK_BOT + 8);
-
-  // track
-  noStroke();
-  fill(UI_PANEL_HI);
-  rect(PG_REF_TRACK_X, PG_REF_TRACK_TOP, PG_REF_TRACK_W, trackH, 3);
-
-  // handle (top = max, bottom = min)
-  float frac = constrain((pgFzRef - PG_REF_MIN) / (PG_REF_MAX - PG_REF_MIN), 0, 1);
-  float hy = PG_REF_TRACK_BOT - frac * trackH;
-  boolean hover = isRefSliderHit(uiMouseX(), uiMouseY()) || _pgRefDragging;
-  fill(hover ? UI_BORDER_ACTIVE : UI_TEXT);
-  ellipse(cx, hy, 14, 14);
-
-  textAlign(LEFT, BASELINE);
-  useUIFont(14);
-  noStroke();
-}
+// (deformation threshold moved to the global RangePanel — uses the Z range)

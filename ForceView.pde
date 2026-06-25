@@ -8,7 +8,7 @@
 //   initForceView()    — call in setup()
 //   drawForceView()    — call in draw() after baseline done
 //   handleFVDrag()     — call from mouseDragged()
-//   Scale slider:  isFVRefSliderHit / updateFVRefSlider / endFVRefSliderDrag
+//   Display scale comes from the global Axis Ranges panel (rangeX/Y/Z).
 //
 // Reads globals: forceX, forceY, forceZ (from Decoupling.pde)
 //
@@ -35,20 +35,6 @@ static final int FV_BAR_H = 400;
 float _fvRotX = -0.4;   // initial tilt (radians)
 float _fvRotY =  0.6;   // initial pan
 int   _fvLastInteract = 0;   // frameCount of last drag/slider touch (idle auto-rotate)
-
-// --- bar-chart full-scale reference (N) ---
-static final float FV_FORCE_REF = 20.0;
-
-// --- user-adjustable 3D display scale (N mapped to full axis), set by the slider ---
-float fvForceRef = 2.0;
-static final float FV_REF_MIN = 0.2;
-static final float FV_REF_MAX = 20.0;
-boolean _fvRefDragging = false;
-// Scale slider track (right margin of the 3D panel)
-static final int FV_REF_TRACK_X   = FV_3D_X + PG_W - 30;
-static final int FV_REF_TRACK_TOP = FV_3D_Y + 60;
-static final int FV_REF_TRACK_BOT = FV_3D_Y + PG_H - 46;
-static final int FV_REF_TRACK_W   = 6;
 
 // --- axis colors (reuse project palette) ---
 color FV_COL_X = 0xFF5A92FF;
@@ -83,19 +69,16 @@ void draw3DPanel() {
   // idle auto-rotation (yaw only) when the user hasn't interacted recently
   if (frameCount - _fvLastInteract > 90) _fvRotY += 0.002;
 
-  // --- raw magnitude + perceptual length factor (drawn pixels only; readouts stay raw N) ---
+  // --- per-axis perceptual length (drawn pixels only; readouts stay raw N) ---
   float fMag = sqrt(forceX*forceX + forceY*forceY + forceZ*forceZ);
-  float t = constrain(fMag / fvForceRef, 0, 1);
-  float visLen = sqrt(t) * axisLen;                 // small forces stay visible
-  float k = (fMag > 1e-4) ? visLen / fMag : 0;      // shared factor preserves direction
-
-  // component pixel lengths (bounded by axisLen); mapped to model dirs below
-  float arrowX = forceX * k;
-  float arrowY = forceY * k;
-  float arrowZ = forceZ * k;
+  float arrowX = fvAxisPx(forceX, rangeX, axisLen);   // each axis scaled by its own range
+  float arrowY = fvAxisPx(forceY, rangeY, axisLen);
+  float arrowZ = fvAxisPx(forceZ, rangeZ, axisLen);
 
   // resultant tip in model space (remapped): +X->-x, +Y->+z, +Z->+y
   float rX = -arrowX, rY = arrowZ, rZ = arrowY;
+  float rLen = sqrt(rX*rX + rY*rY + rZ*rZ);           // clamp into the axis sphere
+  if (rLen > axisLen) { float s = axisLen / rLen; rX *= s; rY *= s; rZ *= s; }
 
   _pg3d.beginDraw();
   _pg3d.background(UI_PANEL);
@@ -142,9 +125,8 @@ void draw3DPanel() {
   image(_fvVignette, FV_3D_X, FV_3D_Y);
   drawPanelFrame(FV_3D_X, FV_3D_Y, PG_W, PG_H, "3D Force Vector");
 
-  // truthful numeric readout (raw N) + scale slider
+  // truthful numeric readout (raw N)
   drawFVReadout(fMag);
-  drawFVRefSlider();
 
   // crisp, upright, constant-size axis labels on top
   drawFVLabel("+X", sxX, syX, FV_COL_X);
@@ -153,6 +135,12 @@ void draw3DPanel() {
 
   textAlign(LEFT, BASELINE);
   useUIFont(14);
+}
+
+// signed perceptual pixel length for one axis component (range = full-scale N)
+float fvAxisPx(float f, float range, float axisLen) {
+  float tt = constrain(abs(f) / range, 0, 1);
+  return (f < 0 ? -1 : 1) * sqrt(tt) * axisLen;
 }
 
 // ============================================================
@@ -340,54 +328,6 @@ PImage makeFVVignette(int w, int h) {
 }
 
 // ============================================================
-// Scale slider (mirrors PressureGrid's threshold slider)
-// ============================================================
-void drawFVRefSlider() {
-  float cx = FV_REF_TRACK_X + FV_REF_TRACK_W / 2.0;
-  float trackH = FV_REF_TRACK_BOT - FV_REF_TRACK_TOP;
-
-  fill(UI_MUTED);
-  useUIFont(11);
-  textAlign(CENTER, BASELINE);
-  text("Scale", cx, FV_REF_TRACK_TOP - 8);
-
-  fill(UI_TEXT);
-  useMonoFont(10);
-  textAlign(CENTER, TOP);
-  text(nf(fvForceRef, 1, 1) + "N", cx, FV_REF_TRACK_BOT + 8);
-
-  noStroke();
-  fill(UI_PANEL_HI);
-  rect(FV_REF_TRACK_X, FV_REF_TRACK_TOP, FV_REF_TRACK_W, trackH, 3);
-
-  float frac = constrain((fvForceRef - FV_REF_MIN) / (FV_REF_MAX - FV_REF_MIN), 0, 1);
-  float hy = FV_REF_TRACK_BOT - frac * trackH;
-  boolean hover = isFVRefSliderHit(uiMouseX(), uiMouseY()) || _fvRefDragging;
-  fill(hover ? UI_BORDER_ACTIVE : UI_TEXT);
-  ellipse(cx, hy, 14, 14);
-
-  textAlign(LEFT, BASELINE);
-  useUIFont(14);
-  noStroke();
-}
-
-boolean isFVRefSliderHit(float mx, float my) {
-  return mx >= FV_REF_TRACK_X - 8 && mx <= FV_REF_TRACK_X + FV_REF_TRACK_W + 8 &&
-         my >= FV_REF_TRACK_TOP - 10 && my <= FV_REF_TRACK_BOT + 10;
-}
-
-void updateFVRefSlider() {
-  float frac = constrain((FV_REF_TRACK_BOT - uiMouseY()) /
-                         (float)(FV_REF_TRACK_BOT - FV_REF_TRACK_TOP), 0, 1);
-  fvForceRef = lerp(FV_REF_MIN, FV_REF_MAX, frac);
-  _fvLastInteract = frameCount;
-}
-
-void endFVRefSliderDrag() {
-  _fvRefDragging = false;
-}
-
-// ============================================================
 // Bar chart — Fx, Fy, Fz, |F|
 // ============================================================
 void drawBarChart() {
@@ -403,8 +343,9 @@ void drawBarChart() {
   String[] names = { "Fx", "Fy", "Fz", "|F|" };
   color[] cols   = { FV_COL_X, FV_COL_Y, FV_COL_Z, FV_COL_R };
 
-  // fixed scale — same reference as 3D arrows
-  float maxVal = FV_FORCE_REF;
+  // per-axis full-scale from the global ranges; |F| uses the combined range
+  float magRange = sqrt(rangeX*rangeX + rangeY*rangeY + rangeZ*rangeZ);
+  float[] maxVals = { rangeX, rangeY, rangeZ, magRange };
 
   int barCount = 4;
   int barW     = 50;
@@ -425,6 +366,7 @@ void drawBarChart() {
   for (int i = 0; i < barCount; i++) {
     int bx = cx + gap + i * (barW + gap);
     float val = vals[i];
+    float maxVal = maxVals[i];
     float barH = (val / maxVal) * halfH;
 
     // bar body
