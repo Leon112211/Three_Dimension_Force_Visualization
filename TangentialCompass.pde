@@ -28,6 +28,12 @@ static final int TC_REF_TRACK_TOP = TC_Y + 50;
 static final int TC_REF_TRACK_BOT = TC_Y + TC_SIZE - 40;
 static final int TC_REF_TRACK_W = 6;                  // track thickness
 
+// --- needle damping state (smooths twitch only; raw values still used for readouts) ---
+float _tcFxySm = 0;                           // EMA-smoothed |Fxy|
+float _tcThetaSm = 0;                         // smoothed needle angle (shortest-path lerp)
+static final float TC_EMA_ALPHA = 0.2;        // magnitude smoothing (higher = less damping)
+static final float TC_ANG_ALPHA = 0.3;        // angle smoothing (higher = less damping)
+
 void initCompass() {
   println("[TangentialCompass] Initialized");
 }
@@ -44,11 +50,6 @@ void drawCompass(float fx, float fy) {
   stroke(76, 88, 112);
   strokeWeight(2);
   ellipse(cx, cy, TC_R * 2, TC_R * 2);
-
-  // thin inner ring
-  stroke(UI_GRID);
-  strokeWeight(0.5);
-  ellipse(cx, cy, TC_R * 1.4, TC_R * 1.4);
 
   // --- crosshair reference lines ---
   stroke(UI_GRID);
@@ -78,14 +79,23 @@ void drawCompass(float fx, float fy) {
   text("+Y", cx, cy - TC_R - 12);
   text("-Y", cx, cy + TC_R + 12);
 
-  // --- compute force vector ---
+  // --- raw force vector (used as-is for the text readouts below) ---
   float fxy = sqrt(fx * fx + fy * fy);
   float theta = atan2(fy, fx);   // angle in radians
 
-  // --- draw center-pivot arrow if force is non-trivial ---
+  // --- damping: smooth magnitude + angle so the needle glides instead of twitching ---
+  _tcFxySm += (fxy - _tcFxySm) * TC_EMA_ALPHA;
   if (fxy > 0.001) {
-    // normalized magnitude (0..1, clamped)
-    float t = constrain(fxy / tcFxyRef, 0, 1);
+    float dAng = theta - _tcThetaSm;
+    while (dAng >  PI) dAng -= TWO_PI;          // shortest-path angle interpolation
+    while (dAng < -PI) dAng += TWO_PI;
+    _tcThetaSm += dAng * TC_ANG_ALPHA;
+  }
+
+  // --- draw center-pivot arrow if force is non-trivial ---
+  if (_tcFxySm > 0.001) {
+    // normalized magnitude (0..1, clamped) from the smoothed value
+    float t = constrain(_tcFxySm / tcFxyRef, 0, 1);
 
     // symmetric half-length: both sides equal, max reaches circle edge
     float halfLen  = t * TC_R;
@@ -98,9 +108,9 @@ void drawCompass(float fx, float fy) {
     // color
     color arrowCol = tcForceColor(t);
 
-    // direction vectors (screen: +X right, +Y up → negate sin for Y)
-    float dirX =  cos(theta);
-    float dirY = -sin(theta);
+    // direction vectors from the smoothed angle (screen: +X right, +Y up -> negate sin)
+    float dirX =  cos(_tcThetaSm);
+    float dirY = -sin(_tcThetaSm);
     float perpX = -dirY;   // perpendicular
     float perpY =  dirX;
 

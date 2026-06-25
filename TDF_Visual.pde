@@ -232,6 +232,7 @@ void mouseDragged() {
   updateUILayout();
   if (_tcRefDragging) { updateCompassSlider(); return; }   // compass threshold slider
   if (_pgRefDragging) { updateRefSlider(); return; }       // pressure threshold slider
+  if (_fvRefDragging) { updateFVRefSlider(); return; }     // force-view scale slider
   if (!_pgDragging) handleFVDrag();   // skip ForceView while orbiting the pressure grid
   handlePGDrag();
 }
@@ -240,6 +241,7 @@ void mouseReleased() {
   endPGDrag();
   endRefSliderDrag();
   endCompassSliderDrag();
+  endFVRefSliderDrag();
 }
 
 void mousePressed() {
@@ -263,6 +265,10 @@ void mousePressed() {
   }
   if (isCompassSliderHit(mx, my)) {     // compass threshold slider
     _tcRefDragging = true;
+    return;
+  }
+  if (isFVRefSliderHit(mx, my)) {       // force-view scale slider
+    _fvRefDragging = true;
     return;
   }
   startPGDrag(mx, my);              // begin free orbit if press is in the pressure panel
