@@ -41,8 +41,8 @@
 #include <BLE2902.h>
 
 // ---- Sensor configuration (must match Single_Sensor.ino) ----------------
-#define MLX_ADDR    0x0C
-#define DEBUG_MODE  0
+#define MLX_ADDR    0x0C    // primary/first-tried address; 0x0C..0x0F auto-scanned
+#define DEBUG_MODE  0       // set to 1 to print an I2C bus scan + sensor status
 
 // ESP32-C3 has a flexible GPIO matrix; I2C can map to any free pins.
 // GPIO8 (SDA) / GPIO9 (SCL) is the common default on C3 Pro/Super Mini
@@ -52,7 +52,7 @@
 
 // ---- BLE configuration --------------------------------------------------
 #define BLE_DEVICE_NAME     "TDF_Sensor"
-#define OUTPUT_INTERVAL_MS  20          // ~50 Hz notify rate; raise if BLE chokes
+#define OUTPUT_INTERVAL_MS  10          // 100 Hz notify rate (1000 / interval)
 
 #define NUS_SERVICE_UUID "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
 #define NUS_CHAR_RX_UUID "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"  // host -> device (write)
@@ -61,6 +61,8 @@
 // ---- Globals ------------------------------------------------------------
 Adafruit_MLX90393 mlx = Adafruit_MLX90393();
 bool sensor_ok = false;
+uint8_t  mlxAddr  = MLX_ADDR;   // resolved at runtime (0x0C..0x0F) by findMLX()
+uint32_t i2cClock = 100000;     // I2C operating clock (100 kHz; findMLX may probe slower)
 
 BLEServer*         bleServer    = nullptr;
 BLECharacteristic* txCharacteristic = nullptr;
@@ -104,25 +106,63 @@ class RxCallbacks : public BLECharacteristicCallbacks {
   }
 };
 
-void setupSensor() {
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-  Wire.setClock(100000);
-  // Note: AVR's Wire.setWireTimeout() does not exist on the ESP32 core
-  // (the ESP-IDF I2C driver handles bus timeout/recovery internally), so it
-  // is intentionally omitted here.
+// Find the MLX with a *lightweight* raw probe (address-ACK only) across its
+// 0x0C..0x0F range and 100/50 kHz. This deliberately avoids calling Adafruit's
+// begin_I2C() more than once: repeatedly re-creating its I2C device on an
+// unpopulated bus destabilised the BLE host (the board advertised but would not
+// accept connections / reboot-looped). We do the cheap probe here, then call
+// begin_I2C() exactly once on the address that actually responded.
+int findMLX() {
+  // 10 kHz added: on a weak-pull-up bus the slower edges are far easier to ACK
+  // (RC rise time fits the longer clock period), so detection can succeed on the
+  // ESP32 internal pull-ups alone. Two passes to ride out intermittent misses.
+  uint32_t clocks[] = { 100000, 50000, 10000 };
+  for (uint8_t pass = 0; pass < 2; pass++) {
+    for (uint8_t c = 0; c < sizeof(clocks) / sizeof(clocks[0]); c++) {
+      Wire.setClock(clocks[c]);
+      for (uint8_t a = 0x0C; a <= 0x0F; a++) {
+        yield();
+        Wire.beginTransmission(a);
+        if (Wire.endTransmission() == 0) {   // got an ACK -> device present
+          i2cClock = clocks[c];
+          return a;
+        }
+      }
+    }
+    delay(50);
+  }
+  return -1;
+}
 
-  if (mlx.begin_I2C(MLX_ADDR)) {
+void setupSensor() {
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);   // proven pin init (same as before)
+  Wire.setClock(100000);
+  delay(50);                              // let the sensor settle after power-up
+
+  int addr = findMLX();
+  if (addr >= 0) {
+    mlxAddr = (uint8_t)addr;
+    Wire.setClock(i2cClock);
+  }
+
+  if (addr >= 0 && mlx.begin_I2C(mlxAddr)) {   // exactly one begin_I2C call
     sensor_ok = true;
+    // Standard 100 kHz I2C (same as the original wired firmware). This relies on
+    // adequate bus pull-ups; if measurement reads still come back corrupt/zero on
+    // a marginal bus, drop this back to 10000 (or add 2.2k-4.7k pull-ups on
+    // SDA/SCL -> 3V3). A failed read is reported as the -1 sentinel below.
+    i2cClock = 100000;
+    Wire.setClock(i2cClock);
     mlx.setFilter(MLX90393_FILTER_3);
     mlx.setOversampling(MLX90393_OSR_1);
     mlx.setGain(MLX90393_GAIN_1X);
-#if DEBUG_MODE
-    Serial.println("# Sensor ready");
-#endif
+    Serial.print("# Sensor ready at 0x");
+    Serial.print(mlxAddr, HEX);
+    Serial.print(" @ ");
+    Serial.print(i2cClock / 1000);
+    Serial.println(" kHz");
   } else {
-#if DEBUG_MODE
-    Serial.println("# Sensor not found; streaming 0,0,0");
-#endif
+    Serial.println("# Sensor not found on 0x0C-0x0F (100/50/10 kHz); streaming 0,0,0");
   }
 }
 
@@ -170,18 +210,17 @@ void setupBLE() {
 void setup() {
   Serial.begin(115200);
 
-#if DEBUG_MODE
-  // Give USB-CDC a moment so early debug lines are not lost.
+  // Give USB-CDC a moment so the one-time boot diagnostics below are not lost.
   unsigned long t0 = millis();
-  while (!Serial && (millis() - t0) < 2000) delay(10);
+  while (!Serial && (millis() - t0) < 1500) delay(10);
+
+#if DEBUG_MODE
   Serial.println("# MLX90393 BLE sensor init");
-  Serial.print("# I2C address: 0x");
-  Serial.println(MLX_ADDR, HEX);
   Serial.println("# Output: NUS TX notifications, frames are x,y,z");
 #endif
 
-  setupSensor();
-  setupBLE();
+  setupBLE();      // advertise first so the device is always discoverable,
+  setupSensor();   // even if sensor probing is slow or the bus is unpopulated
 }
 
 void loop() {
@@ -197,7 +236,13 @@ void loop() {
     float z = 0.0;
 
     if (sensor_ok) {
-      mlx.readData(&x, &y, &z);
+      if (!mlx.readData(&x, &y, &z)) {
+        // Read failed on the bus this cycle -> emit a sentinel so the failure is
+        // visible to the host instead of an indistinguishable silent 0,0,0.
+        x = -1.0;
+        y = -1.0;
+        z = -1.0;
+      }
     }
 
     if (finiteFrame(x, y, z)) {

@@ -47,14 +47,14 @@ void setup() {
   useUIFont(14);
   textAlign(LEFT, BASELINE);
 
-  initReceiver();     // SensorReceiver.pde
+  // Data source (Serial/BLE) and baseline calibration are started from the
+  // startup chooser (Connection.pde), once the user picks a source.
   initDecoupling();   // Decoupling.pde — build S and D matrices
   initForceView();    // ForceView.pde  — 3D arrows + bar chart
   initPressureGrid(); // PressureGrid.pde — Z-axis pressure surface
   initCompass();      // TangentialCompass.pde — XY force compass
   initPlot();         // SensorPlot.pde  — real-time Bx/By/Bz waveform
   initRangePanel();   // RangePanel.pde  — global X/Y/Z display ranges
-  initBaseline();     // Baseline.pde   — begin 300-sample calibration
 }
 
 void draw() {
@@ -65,11 +65,27 @@ void draw() {
   scale(_uiScale);
   drawAppBackdrop();
 
-  updateReceiver();
+  // --- startup: choose data source (Serial / BLE) ---
+  if (connMode == CONN_NONE) {
+    drawConnectionChooser();
+    popMatrix();
+    return;
+  }
 
-  // --- serial not connected ---
-  if (!isReceiverReady()) {
+  updateConnection();
+
+  // --- chosen source not ready (e.g. serial port missing) ---
+  if (!isConnectionReady()) {
     drawNoConnection();
+    drawBackButton(isBackButtonHit(uiMouseX(), uiMouseY()));
+    popMatrix();
+    return;
+  }
+
+  // --- BLE: waiting for the first frame from the bridge ---
+  if (connMode == CONN_BLE && receiverValidFrameCount() == 0) {
+    drawBleConnecting();
+    drawBackButton(isBackButtonHit(uiMouseX(), uiMouseY()));
     popMatrix();
     return;
   }
@@ -149,9 +165,10 @@ void drawTopHUD(float dVx, float dVy, float dVz) {
   float by = y + 29;
   float bx = x + 16 + textWidth("TDF Visual") + 16;
   bx = drawBadgeFlow(bx, by, SENSOR_NAMES[activeSensor], UI_PANEL_HI, UI_TEXT) + 8;
-  bx = drawBadgeFlow(bx, by, newDataAvailable ? "LIVE" : "HOLD",
-                     newDataAvailable ? color(36, 92, 62) : color(64, 68, 78),
-                     newDataAvailable ? UI_GOOD : UI_MUTED) + 8;
+  boolean live = isStreamLive();
+  bx = drawBadgeFlow(bx, by, live ? "LIVE" : "HOLD",
+                     live ? color(36, 92, 62) : color(64, 68, 78),
+                     live ? UI_GOOD : UI_MUTED) + 8;
   if (receiverBadFrameCount() > 0) {
     drawBadgeFlow(bx, by, "BAD " + receiverBadFrameCount(), color(78, 51, 28), UI_WARN);
   }
@@ -161,6 +178,9 @@ void drawTopHUD(float dVx, float dVy, float dVz) {
 
   // FPS readout (left of the Calibration button)
   drawFpsReadout();
+
+  // Source button (left of FPS) — click to hot-swap Serial <-> BLE at runtime
+  drawSourceButton(isSourceButtonHit(uiMouseX(), uiMouseY()));
 
   int baseX0 = x + 18;       // Baseline (first column)
   int magX = x + 240;        // Magnetic delta
@@ -247,13 +267,56 @@ void drawFpsReadout() {
   noStroke();
 }
 
+// --- Source button (left of FPS) — hot-swap Serial <-> BLE at runtime ---
+static final int SRC_BTN_W = 120;
+static final int SRC_BTN_H = CAL_BTN_H;
+static final int SRC_BTN_X = CAL_BTN_X - 96 - 14 - 14 - SRC_BTN_W;  // left of FPS
+static final int SRC_BTN_Y = CAL_BTN_Y;
+
+boolean isSourceButtonHit(float mx, float my) {
+  return mx >= SRC_BTN_X && mx <= SRC_BTN_X + SRC_BTN_W &&
+         my >= SRC_BTN_Y && my <= SRC_BTN_Y + SRC_BTN_H;
+}
+
+void drawSourceButton(boolean hover) {
+  noStroke();
+  fill(hover ? UI_BORDER_ACTIVE : UI_PANEL_HI);
+  rect(SRC_BTN_X, SRC_BTN_Y, SRC_BTN_W, SRC_BTN_H, 6);
+  fill(UI_MUTED);
+  useUIFont(10);
+  textAlign(LEFT, CENTER);
+  text("SOURCE", SRC_BTN_X + 10, SRC_BTN_Y + SRC_BTN_H / 2.0 + 1);
+  fill(UI_TEXT);
+  useUIFont(12);
+  textAlign(RIGHT, CENTER);
+  text(connMode == CONN_BLE ? "BLE" : "Serial",
+       SRC_BTN_X + SRC_BTN_W - 10, SRC_BTN_Y + SRC_BTN_H / 2.0 + 1);
+  textAlign(LEFT, BASELINE);
+  useUIFont(14);
+  noStroke();
+}
+
 // ============================================================
 // Input handlers
 // ============================================================
 void keyPressed() {
+  // Startup chooser: [S] Serial, [B] Bluetooth LE
+  if (connMode == CONN_NONE) {
+    if (key == 's' || key == 'S') startSerial();
+    else if (key == 'b' || key == 'B') startBLE();
+    return;
+  }
+
+  // [ESC] — disconnect and return to the source chooser (do not quit)
+  if (key == ESC) {
+    key = 0;
+    resetToChooser();
+    return;
+  }
+
   // [C] — recalibrate baseline
   if (key == 'c' || key == 'C') {
-    if (isReceiverReady()) {
+    if (isConnectionReady()) {
       initBaseline();
       println("[TDF] Baseline recalibration triggered by user.");
     }
@@ -278,10 +341,28 @@ void mouseReleased() {
 }
 
 void mousePressed() {
-  // Clickable controls are only shown/active during normal operation
-  if (!isBaselineDone() || !isReceiverReady()) return;
   float mx = uiMouseX();
   float my = uiMouseY();
+
+  // Startup chooser — pick the data source
+  if (connMode == CONN_NONE) {
+    handleChooserClick(mx, my);
+    return;
+  }
+
+  // Waiting / error screens — only the Back button is active
+  if (!isConnectionReady() || (connMode == CONN_BLE && receiverValidFrameCount() == 0)) {
+    if (isBackButtonHit(mx, my)) resetToChooser();
+    return;
+  }
+
+  // Calibrating — no panel controls yet
+  if (!isBaselineDone()) return;
+
+  if (isSourceButtonHit(mx, my)) {   // hot-swap data source
+    resetToChooser();
+    return;
+  }
   if (isCalibrationButtonHit(mx, my)) {
     initBaseline();
     println("[TDF] Baseline recalibration triggered by Calibration button.");
@@ -398,7 +479,7 @@ void drawNoConnection() {
   // --- 6. subtitle ---
   fill(160, 100, 100);
   textSize(13);
-  text("No serial device detected.  Check cable and restart sketch.", cx, cy + 190);
+  text("No serial device detected.  Connect it, or press < Back to choose another source.", cx, cy + 190);
 
   // --- 7. port list box ---
   String[] ports = Serial.list();

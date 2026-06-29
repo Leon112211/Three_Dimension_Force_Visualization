@@ -20,6 +20,8 @@ float sensorBx = 0;
 float sensorBy = 0;
 float sensorBz = 0;
 boolean newDataAvailable = false;
+int _lastSampleMs = 0;                    // millis() of the last valid frame
+static final int LIVE_TIMEOUT_MS = 400;  // LIVE if a frame arrived within this window
 
 Serial _port;
 boolean _receiverReady = false;
@@ -106,6 +108,7 @@ void parseCSVLine(String line) {
     sensorBy = by;
     sensorBz = bz;
     newDataAvailable = true;
+    _lastSampleMs = millis();
     _validFrameCount++;
   } catch (Exception e) {
     recordBadFrame(line, "parse error: " + e.getMessage());
@@ -150,6 +153,13 @@ String shortenSerialLine(String line) {
 
 boolean isReceiverReady() {
   return _receiverReady;
+}
+
+// Stream is "live" if a valid frame arrived recently. Time-based, so the badge
+// stays steady while data flows (~50 Hz) instead of flickering every draw frame;
+// it only goes HOLD when data genuinely stops (disconnect / power-off / stall).
+boolean isStreamLive() {
+  return _validFrameCount > 0 && (millis() - _lastSampleMs) < LIVE_TIMEOUT_MS;
 }
 
 int receiverValidFrameCount() {
