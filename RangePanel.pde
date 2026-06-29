@@ -1,9 +1,10 @@
 // ============================================================
 // RangePanel.pde
 // Global per-axis display ranges (full-scale force, N) that drive
-// EVERY visualization panel. Three vertical sliders (X / Y / Z) plus
-// an XY lock (default on) that keeps the X and Y ranges equal and in
-// sync. Sliders use a squared map for fine resolution at low force.
+// EVERY visualization panel: three vertical sliders (X / Y / Z) plus an
+// XY lock (default on) that keeps X and Y equal. A fourth "DENT" slider
+// tunes the PressureGrid dent/red sensitivity (visual ONLY — never
+// changes forceZ). Range sliders use a squared map for fine low-end res.
 //
 // Public API:
 //   initRangePanel()  — call in setup()
@@ -23,10 +24,17 @@ boolean rangeXYLocked = true;
 static final float RANGE_MIN = 0.2;
 static final float RANGE_MAX = 50.0;
 
+// --- Z-pressure visual sensitivity (effect ONLY; never changes forceZ or any
+//     computed value). Scales how strongly a given Fz dents/reddens the
+//     PressureGrid. Geometric map so 1.0x sits at the slider's midpoint. ---
+float pgZGain = 1.0;
+static final float PG_GAIN_MIN = 0.2;   // hardest to dent
+static final float PG_GAIN_MAX = 5.0;   // easiest to dent
+
 // --- panel layout (compact, bottom-right) ---
 static final int RP_X = 1080;
 static final int RP_Y = 630;
-static final int RP_W = 240;
+static final int RP_W = 256;
 static final int RP_H = 280;
 
 // XY lock button (top-right of the panel)
@@ -45,9 +53,9 @@ static final int RP_RST_Y = RP_Y + RP_H - 26;
 static final int RP_TRACK_TOP = RP_Y + 64;
 static final int RP_TRACK_BOT = RP_Y + RP_H - 62;
 static final int RP_TRACK_W   = 6;
-int[] _rpColX = { RP_X + 50, RP_X + 120, RP_X + 190 };   // compact column centers (X, Y, Z)
+int[] _rpColX = { RP_X + 36, RP_X + 98, RP_X + 160, RP_X + 222 };   // column centers (X, Y, Z, DENT)
 
-int _rangeDragging = -1;   // 0=X, 1=Y, 2=Z, -1=none
+int _rangeDragging = -1;   // 0=X, 1=Y, 2=Z, 3=DENT, -1=none
 
 void initRangePanel() {
   println("[RangePanel] Axis ranges X=" + rangeX + " Y=" + rangeY + " Z=" + rangeZ
@@ -66,10 +74,10 @@ void drawRangePanel() {
   drawRangeLockButton(isRangeLockHit(uiMouseX(), uiMouseY()));
   drawRangeReset(isRangeResetHit(uiMouseX(), uiMouseY()));
 
-  String[] labels = { "X", "Y", "Z" };
-  color[]  cols   = { UI_X, UI_Y, UI_Z };
-  float[]  vals   = { rangeX, rangeY, rangeZ };
-  for (int i = 0; i < 3; i++) {
+  String[] labels = { "X", "Y", "Z", "DENT" };
+  color[]  cols   = { UI_X, UI_Y, UI_Z, UI_RESULT };
+  float[]  vals   = { rangeX, rangeY, rangeZ, pgZGain };
+  for (int i = 0; i < 4; i++) {
     drawRangeSlider(i, labels[i], cols[i], vals[i]);
   }
 
@@ -82,9 +90,9 @@ void drawRangeSlider(int i, String label, color c, float val) {
   float cx = _rpColX[i];
   float trackH = RP_TRACK_BOT - RP_TRACK_TOP;
 
-  // axis letter above
+  // axis letter above (smaller for the multi-char DENT label)
   fill(c);
-  useUIFont(13);
+  useUIFont(i == 3 ? 11 : 13);
   textAlign(CENTER, BASELINE);
   text(label, cx, RP_TRACK_TOP - 10);
 
@@ -92,7 +100,7 @@ void drawRangeSlider(int i, String label, color c, float val) {
   fill(UI_TEXT);
   useMonoFont(10);
   textAlign(CENTER, TOP);
-  text(nf(val, 1, 1), cx, RP_TRACK_BOT + 8);
+  text(i == 3 ? nf(val, 1, 1) + "x" : nf(val, 1, 1), cx, RP_TRACK_BOT + 8);
 
   // track
   noStroke();
@@ -100,7 +108,9 @@ void drawRangeSlider(int i, String label, color c, float val) {
   rect(cx - RP_TRACK_W / 2.0, RP_TRACK_TOP, RP_TRACK_W, trackH, 3);
 
   // filled portion (axis color) from bottom up to the handle
-  float frac = sqrt(constrain((val - RANGE_MIN) / (RANGE_MAX - RANGE_MIN), 0, 1));
+  float frac = (i == 3)
+    ? constrain(log(val / PG_GAIN_MIN) / log(PG_GAIN_MAX / PG_GAIN_MIN), 0, 1)
+    : sqrt(constrain((val - RANGE_MIN) / (RANGE_MAX - RANGE_MIN), 0, 1));
   float hy = RP_TRACK_BOT - frac * trackH;
   fill(c, 130);
   rect(cx - RP_TRACK_W / 2.0, hy, RP_TRACK_W, RP_TRACK_BOT - hy, 3);
@@ -128,7 +138,7 @@ boolean isRangeSliderHit(int i, float mx, float my) {
 }
 
 int rangeSliderHit(float mx, float my) {
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 4; i++) {
     if (isRangeSliderHit(i, mx, my)) return i;
   }
   return -1;
@@ -137,6 +147,10 @@ int rangeSliderHit(float mx, float my) {
 void updateRangeSlider(int i) {
   float frac = constrain((RP_TRACK_BOT - uiMouseY()) /
                          (float)(RP_TRACK_BOT - RP_TRACK_TOP), 0, 1);
+  if (i == 3) {   // Z-pressure visual sensitivity — geometric map (1.0x at midpoint)
+    pgZGain = PG_GAIN_MIN * pow(PG_GAIN_MAX / PG_GAIN_MIN, frac);
+    return;
+  }
   float v = RANGE_MIN + (RANGE_MAX - RANGE_MIN) * frac * frac;   // squared map
   if (i == 0) {
     rangeX = v;
@@ -195,6 +209,7 @@ void resetRanges() {
   rangeY = 5.0;
   rangeZ = 20.0;
   rangeXYLocked = true;
+  pgZGain = 1.0;
   println("[RangePanel] Ranges reset to defaults.");
 }
 

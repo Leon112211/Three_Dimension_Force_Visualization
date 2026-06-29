@@ -51,8 +51,10 @@ void drawPressureGrid() {
   float cellSize = GRID_SIZE / GRID_N;
   float halfGrid = GRID_SIZE / 2.0;
 
-  // center displacement driven by Fz
-  float centerDisp = forceZ * FZ_SCALE;    // positive Fz = push down
+  // center displacement driven by Fz. pgZGain (RangePanel "DENT" slider) is a
+  // visual-only sensitivity multiplier — it scales the dent/red effect WITHOUT
+  // touching forceZ or any computed value (the "Fz ... N" readout stays real).
+  float centerDisp = forceZ * FZ_SCALE * pgZGain;   // positive Fz = push down
 
   // --- dot-matrix references (color + size scale with local force) ---
   float refDisp = FZ_SCALE * rangeZ;     // saturation threshold = global Z range
