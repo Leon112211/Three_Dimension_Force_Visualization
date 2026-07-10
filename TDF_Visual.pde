@@ -182,6 +182,9 @@ void drawTopHUD(float dVx, float dVy, float dVz) {
   // Source button (left of FPS) — click to hot-swap Serial <-> BLE at runtime
   drawSourceButton(isSourceButtonHit(uiMouseX(), uiMouseY()));
 
+  // REC button (left of SOURCE) — start/stop CSV recording (CsvExport.pde)
+  drawRecButton(isRecButtonHit(uiMouseX(), uiMouseY()));
+
   int baseX0 = x + 18;       // Baseline (first column)
   int magX = x + 240;        // Magnetic delta
   int forceX0 = x + 462;     // Decoupled force
@@ -219,11 +222,19 @@ void drawReadoutRow(int x, int y, String label, float value, color c) {
   text(nf(value, 1, 4), x + 44, y);
 }
 
-// --- Calibration button (clickable, in the Top HUD) ---
-static final int CAL_BTN_X = 726;
-static final int CAL_BTN_Y = 55;
-static final int CAL_BTN_W = 110;
-static final int CAL_BTN_H = 30;
+// --- Top-HUD control column: REC / SOURCE / FPS / Calibration ---
+// Four equal controls stacked vertically along the Sensor State panel's
+// right inner edge (x = 30 + 820 - 16 - w = 634), filling its height:
+// rows at y = 38 / 76 / 114 / 152 (h=30, gap=8; panel spans 30..190).
+static final int HUD_BTN_W   = 200;
+static final int HUD_BTN_H   = 30;
+static final int HUD_BTN_GAP = 8;
+static final int HUD_BTN_X   = 834 - HUD_BTN_W;
+static final int HUD_BTN_Y0  = 38;   // REC row; following rows step by H+GAP
+static final int CAL_BTN_X = HUD_BTN_X;
+static final int CAL_BTN_Y = HUD_BTN_Y0 + 3 * (HUD_BTN_H + HUD_BTN_GAP);
+static final int CAL_BTN_W = HUD_BTN_W;
+static final int CAL_BTN_H = HUD_BTN_H;
 
 boolean isCalibrationButtonHit(float mx, float my) {
   return mx >= CAL_BTN_X && mx <= CAL_BTN_X + CAL_BTN_W &&
@@ -247,31 +258,33 @@ void drawCalibrationButton(boolean hover) {
 void drawFpsReadout() {
   float fps = frameRate;   // Processing's built-in smoothed frame rate
   color c = fps >= 50 ? UI_GOOD : (fps >= 30 ? UI_WARN : UI_DANGER);
-  int fw = 96;
-  int fh = CAL_BTN_H;
-  int fx = CAL_BTN_X - fw - 14;
-  int fy = CAL_BTN_Y;
+  int fw = HUD_BTN_W;
+  int fh = HUD_BTN_H;
+  int fx = HUD_BTN_X;
+  int fy = HUD_BTN_Y0 + 2 * (HUD_BTN_H + HUD_BTN_GAP);
   noStroke();
   fill(UI_PANEL_HI);
   rect(fx, fy, fw, fh, 6);
-  fill(UI_MUTED);
-  useUIFont(10);
+  useUIFont(13);
+  String fpsLab = "FPS  ";
+  String fpsVal = nf(fps, 1, 1);
+  float tx = fx + (fw - textWidth(fpsLab) - textWidth(fpsVal)) / 2.0;
+  float ty = fy + fh / 2.0 + 1;
   textAlign(LEFT, CENTER);
-  text("FPS", fx + 10, fy + fh / 2.0 + 1);
+  fill(UI_MUTED);
+  text(fpsLab, tx, ty);
   fill(c);
-  useMonoFont(15);
-  textAlign(RIGHT, CENTER);
-  text(nf(fps, 1, 1), fx + fw - 10, fy + fh / 2.0 + 1);
+  text(fpsVal, tx + textWidth(fpsLab), ty);
   textAlign(LEFT, BASELINE);
   useUIFont(14);
   noStroke();
 }
 
-// --- Source button (left of FPS) — hot-swap Serial <-> BLE at runtime ---
-static final int SRC_BTN_W = 120;
-static final int SRC_BTN_H = CAL_BTN_H;
-static final int SRC_BTN_X = CAL_BTN_X - 96 - 14 - 14 - SRC_BTN_W;  // left of FPS
-static final int SRC_BTN_Y = CAL_BTN_Y;
+// --- Source button (row 2 of the control column) — hot-swap Serial <-> BLE ---
+static final int SRC_BTN_W = HUD_BTN_W;
+static final int SRC_BTN_H = HUD_BTN_H;
+static final int SRC_BTN_X = HUD_BTN_X;
+static final int SRC_BTN_Y = HUD_BTN_Y0 + (HUD_BTN_H + HUD_BTN_GAP);
 
 boolean isSourceButtonHit(float mx, float my) {
   return mx >= SRC_BTN_X && mx <= SRC_BTN_X + SRC_BTN_W &&
@@ -282,15 +295,16 @@ void drawSourceButton(boolean hover) {
   noStroke();
   fill(hover ? UI_BORDER_ACTIVE : UI_PANEL_HI);
   rect(SRC_BTN_X, SRC_BTN_Y, SRC_BTN_W, SRC_BTN_H, 6);
-  fill(UI_MUTED);
-  useUIFont(10);
+  useUIFont(13);
+  String srcLab = "SOURCE  ";
+  String srcVal = connMode == CONN_BLE ? "BLE" : "Serial";
+  float sx = SRC_BTN_X + (SRC_BTN_W - textWidth(srcLab) - textWidth(srcVal)) / 2.0;
+  float sy = SRC_BTN_Y + SRC_BTN_H / 2.0 + 1;
   textAlign(LEFT, CENTER);
-  text("SOURCE", SRC_BTN_X + 10, SRC_BTN_Y + SRC_BTN_H / 2.0 + 1);
+  fill(UI_MUTED);
+  text(srcLab, sx, sy);
   fill(UI_TEXT);
-  useUIFont(12);
-  textAlign(RIGHT, CENTER);
-  text(connMode == CONN_BLE ? "BLE" : "Serial",
-       SRC_BTN_X + SRC_BTN_W - 10, SRC_BTN_Y + SRC_BTN_H / 2.0 + 1);
+  text(srcVal, sx + textWidth(srcLab), sy);
   textAlign(LEFT, BASELINE);
   useUIFont(14);
   noStroke();
@@ -359,6 +373,11 @@ void mousePressed() {
   // Calibrating — no panel controls yet
   if (!isBaselineDone()) return;
 
+  if (isRecButtonHit(mx, my)) {      // start / stop CSV recording
+    if (csvRecording) stopCsvExport(true);
+    else startCsvExport();
+    return;
+  }
   if (isSourceButtonHit(mx, my)) {   // hot-swap data source
     resetToChooser();
     return;

@@ -73,6 +73,7 @@ void updateConnection() {
 
 // Tear down the current source and return to the chooser.
 void resetToChooser() {
+  if (csvRecording) stopCsvExport(false);   // silent save with timestamp name
   if (connMode == CONN_BLE) {
     stopBleBridge();
   } else if (connMode == CONN_SERIAL) {

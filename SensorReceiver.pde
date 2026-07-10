@@ -110,6 +110,7 @@ void parseCSVLine(String line) {
     newDataAvailable = true;
     _lastSampleMs = millis();
     _validFrameCount++;
+    csvRecordRow(bx, by, bz);   // CsvExport.pde — no-op unless recording
   } catch (Exception e) {
     recordBadFrame(line, "parse error: " + e.getMessage());
   }

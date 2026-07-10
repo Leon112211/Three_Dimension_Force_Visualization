@@ -34,7 +34,7 @@ static final float PG_GAIN_MAX = 5.0;   // easiest to dent
 // --- panel layout (compact, bottom-right) ---
 static final int RP_X = 1080;
 static final int RP_Y = 630;
-static final int RP_W = 256;
+static final int RP_W = 240;   // right edge 1080+240=1320, aligned with the panels above
 static final int RP_H = 280;
 
 // XY lock button (top-right of the panel)
@@ -53,7 +53,7 @@ static final int RP_RST_Y = RP_Y + RP_H - 26;
 static final int RP_TRACK_TOP = RP_Y + 64;
 static final int RP_TRACK_BOT = RP_Y + RP_H - 62;
 static final int RP_TRACK_W   = 6;
-int[] _rpColX = { RP_X + 36, RP_X + 98, RP_X + 160, RP_X + 222 };   // column centers (X, Y, Z, DENT)
+int[] _rpColX = { RP_X + 32, RP_X + 90, RP_X + 148, RP_X + 206 };   // column centers (X, Y, Z, DENT)
 
 int _rangeDragging = -1;   // 0=X, 1=Y, 2=Z, 3=DENT, -1=none
 
