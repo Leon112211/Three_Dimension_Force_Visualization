@@ -1,0 +1,5 @@
+# Nested independent git repo (data-processing pipeline) - managed by its own history
+TDF_DataProcess/
+
+# Excel lock files
+~$*
