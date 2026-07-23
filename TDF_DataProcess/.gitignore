@@ -1,0 +1,11 @@
+# Rolling backups written by process_sensitivity.py before overwriting outputs
+*.bak
+
+# Excel lock files (created while a workbook is open)
+~$*
+
+# Python cache
+__pycache__/
+
+# IDE project files
+.idea/
