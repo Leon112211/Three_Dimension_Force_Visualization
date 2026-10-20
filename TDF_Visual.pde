@@ -3,13 +3,14 @@
 // Three-Dimensional Force Sensor Visualization
 // Sensor models: H2 / H4 / H6
 //
-// Flow: Serial CSV → Baseline calibration → Decoupling F=D*dV → HUD
+// Flow: Serial / BLE / Demo frames → Baseline calibration → Decoupling F=D*dV → HUD
 // Keyboard shortcuts:
 //   [T]   Toggle S / D view
 //   [1/2/3] Select sensor H2 / H4 / H6
 // ============================================================
 
-static final int DESIGN_W = 1350;
+static final int DESIGN_W = 1730;   // force dashboard (MAIN_W) + triboelectric column (TengPanel.pde)
+static final int MAIN_W = 1350;     // width of the original force dashboard area
 static final int DESIGN_H = 940;
 static final float STARTUP_UI_SCALE = 0.78;
 static final float START_SCREEN_W = 0.82;
@@ -55,6 +56,8 @@ void setup() {
   initCompass();      // TangentialCompass.pde — XY force compass
   initPlot();         // SensorPlot.pde  — real-time Bx/By/Bz waveform
   initRangePanel();   // RangePanel.pde  — global X/Y/Z display ranges
+  initTengPanel();    // TengPanel.pde   — 4-channel triboelectric column
+  initMaterialPanel(); // MaterialPanel.pde — material-recognition result card
 }
 
 void draw() {
@@ -143,6 +146,10 @@ void draw() {
   // --- global X/Y/Z display ranges ---
   drawRangePanel();
 
+  // --- right column: material-recognition card + triboelectric (TENG) panel ---
+  drawMaterialPanel();
+  drawTengPanel();
+
   // --- always-visible matrix overlay (on top of everything) ---
   drawMatrixHUD();
 
@@ -169,6 +176,9 @@ void drawTopHUD(float dVx, float dVy, float dVz) {
   bx = drawBadgeFlow(bx, by, live ? "LIVE" : "HOLD",
                      live ? color(36, 92, 62) : color(64, 68, 78),
                      live ? UI_GOOD : UI_MUTED) + 8;
+  if (connMode == CONN_DEMO) {   // simulated data — never mistake it for a real sensor
+    bx = drawBadgeFlow(bx, by, "DEMO", color(78, 51, 28), UI_WARN) + 8;
+  }
   if (receiverBadFrameCount() > 0) {
     drawBadgeFlow(bx, by, "BAD " + receiverBadFrameCount(), color(78, 51, 28), UI_WARN);
   }
@@ -297,7 +307,8 @@ void drawSourceButton(boolean hover) {
   rect(SRC_BTN_X, SRC_BTN_Y, SRC_BTN_W, SRC_BTN_H, 6);
   useUIFont(13);
   String srcLab = "SOURCE  ";
-  String srcVal = connMode == CONN_BLE ? "BLE" : "Serial";
+  String srcVal = connMode == CONN_BLE ? "BLE"
+                : (connMode == CONN_DEMO ? "Demo" : "Serial");
   float sx = SRC_BTN_X + (SRC_BTN_W - textWidth(srcLab) - textWidth(srcVal)) / 2.0;
   float sy = SRC_BTN_Y + SRC_BTN_H / 2.0 + 1;
   textAlign(LEFT, CENTER);
@@ -314,10 +325,11 @@ void drawSourceButton(boolean hover) {
 // Input handlers
 // ============================================================
 void keyPressed() {
-  // Startup chooser: [S] Serial, [B] Bluetooth LE
+  // Startup chooser: [S] Serial, [B] Bluetooth LE, [D] Demo (simulated)
   if (connMode == CONN_NONE) {
     if (key == 's' || key == 'S') startSerial();
     else if (key == 'b' || key == 'B') startBLE();
+    else if (key == 'd' || key == 'D') startDemo();
     return;
   }
 
@@ -374,6 +386,10 @@ void mousePressed() {
   if (!isBaselineDone()) return;
 
   if (isRecButtonHit(mx, my)) {      // start / stop CSV recording
+    if (connMode == CONN_DEMO) {     // no fake recordings in csv_export/
+      println("[CsvExport] Recording is disabled in demo mode.");
+      return;
+    }
     if (csvRecording) stopCsvExport(true);
     else startCsvExport();
     return;
@@ -411,6 +427,10 @@ void mousePressed() {
   }
   if (isPlotResetHit(mx, my)) {         // waveform points reset
     resetPlotPoints();
+    return;
+  }
+  if (isTengResetHit(mx, my)) {         // TENG peaks / events reset
+    resetTengPeaks();
     return;
   }
   startPGDrag(mx, my);              // begin free orbit if press is in the pressure panel

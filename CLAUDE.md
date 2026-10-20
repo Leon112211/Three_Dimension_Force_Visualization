@@ -21,7 +21,7 @@ TDF_Visual/            ← Processing sketch (visualization) + host-side bridges
 
 Open the `TDF_Visual/` folder in the **Processing IDE** (4.x) and press Run. There is no build step — Processing compiles every `.pde` tab in the folder together as one program (subfolders like `TDF_DataProcess/` are ignored by Processing). Execution starts in `TDF_Visual.pde`.
 
-On startup the sketch shows a **data-source chooser** (two cards): **Serial (USB)** or **Bluetooth LE**. Keys `S`/`B` work too. Baseline calibration starts after a source is picked. `ESC` (or the top-HUD SOURCE button) returns to the chooser at any time (hot-swap).
+On startup the sketch shows a **data-source chooser**: two cards, **Serial (USB)** or **Bluetooth LE**, plus a **Preview Demo** button (simulated data, no hardware — `DemoSource.pde`). Keys `S`/`B`/`D` work too. Baseline calibration starts after a source is picked. `ESC` (or the top-HUD SOURCE button) returns to the chooser at any time (hot-swap).
 
 ### Firmware (two variants, same `x,y,z` text protocol)
 
@@ -62,8 +62,9 @@ Each `.pde` file is a **tab** in one sketch (shared global namespace).
 | File | Role |
 |------|------|
 | `TDF_Visual.pde` | Main entry — `settings/setup/draw`, input dispatchers, top HUD (readouts + right-side control column: REC / SOURCE / FPS / Calibration), design-space scaling, no-connection screen. |
-| `Connection.pde` | Data-source state machine (`CONN_NONE/SERIAL/BLE`), startup chooser UI, BLE bridge process management (launch `ble_bridge.py`, stdout→parser / stderr→status threads, shutdown hook), Back button, `isConnectionReady()`, `resetToChooser()` hot-swap. |
-| `SensorReceiver.pde` | Frame parser shared by both transports. `parseCSVLine()` → `sensorBx/By/Bz`, `newDataAvailable`; accepts `Bx,By,Bz` · `SensorID,Bx,By,Bz` · `Bx,By,Bz,Fx,Fy,Fz`. Time-based `isStreamLive()` (400 ms window) drives the LIVE/HOLD badge. |
+| `Connection.pde` | Data-source state machine (`CONN_NONE/SERIAL/BLE/DEMO`), startup chooser UI (incl. Preview Demo button), BLE bridge process management (launch `ble_bridge.py`, stdout→parser / stderr→status threads, shutdown hook), Back button, `isConnectionReady()`, `resetToChooser()` hot-swap. |
+| `DemoSource.pde` | Demo source (`CONN_DEMO`): one synthetic frame per draw, `B = B0 + S·F(t) + noise` with a 12 s press / slide / combined loop, plus TENG channels derived from the force's rate of change (`pushDemoTeng`) and a scripted material per touch whose charge affinity sets the pulse polarity; a stand-in classifier (`demoClassify`, not a trained model) drives the Material card. Each 4 s segment = 3 s touch + 1 s rest, injected via `acceptFrame(..., false)` so the real pipeline runs unchanged. Shows a DEMO badge; REC is disabled. |
+| `SensorReceiver.pde` | Frame parser shared by all sources. `parseCSVLine()` → `acceptFrame()` → `sensorBx/By/Bz`, `newDataAvailable`; accepts `Bx,By,Bz` · `SensorID,Bx,By,Bz` · `Bx,By,Bz,Fx,Fy,Fz`. Time-based `isStreamLive()` (400 ms window) drives the LIVE/HOLD badge. |
 | `CsvExport.pde` | Manual CSV recording. REC/STOP button; rows appended on the **data thread** at full sample rate into `csv_export/` (`rec_<ts>.tmp.csv` → renamed on stop); name dialog runs async on the AWT EDT (never block the animation thread — it deadlocks NEWT); crash-rescue of leftover tmp files. Columns: epoch_ms, t_ms, B, ΔB, F. |
 | `Baseline.pde` | Averages 100 valid samples → `baselineX/Y/Z`; progress bars; state machine `BS_IDLE/SAMPLING/DONE`. |
 | `Decoupling.pde` | Loads S, computes D=S⁻¹, `computeForce()` → `forceX/Y/Z` (Z clamped ≥ 0). `invert3x3()`/`det3x3()`. |
@@ -72,8 +73,10 @@ Each `.pde` file is a **tab** in one sketch (shared global namespace).
 | `TangentialCompass.pde` | XY force as a center-pivot compass arrow. |
 | `SensorPlot.pde` | Scrolling ΔB waveform (ring buffer, points slider + Reset). |
 | `RangePanel.pde` | Global per-axis display ranges (X/Y/Z sliders + XY lock + Reset) **plus the DENT slider** (`pgZGain`, 0.2–5×, geometric map). Right edge aligned at x=1320 with the panels above. |
-| `MatrixHUD.pde` | S/D matrix overlay, sensor tabs + S/D toggle. |
-| `Theme.pde` | Palette (`UI_*`), fonts (`useUIFont/useMonoFont`), panel/badge helpers. |
+| `MatrixHUD.pde` | S/D matrix overlay, sensor tabs + S/D toggle. Right-aligned to `MAIN_W`, not `DESIGN_W`. |
+| `MaterialPanel.pde` | **Material recognition** card, top of the right column (x=1340, y=30, 360×160 — same row as Sensor State/Matrix): WAITING/SENSING/RESULT badge, material + confidence, top-3 probability bars, last-5 history chips. Classifier-agnostic API: `materialBeginContact()` / `materialUpdate(float[] probs)` / `materialCommit()`; candidates in `MATERIAL_NAMES` (Nylon, Skin, Paper, PET, Silicone, PTFE — triboelectric order). **Only the demo drives it**; otherwise shows "No classifier connected". |
+| `TengPanel.pde` | **Triboelectric (TENG)** panel below the Material card (x=1340, y=210, 360×700 — same row as the 3D/bar/pressure panels): 4 channel strips (LED, value, decaying peak, ring-buffer waveform, ±`TENG_RANGE_V`), event counter + Reset, 2×2 electrode map (`TENG_QUADRANT`: T1 TL, T2 TR, T3 BL, T4 BR) with the live XY arrow / Fz dot. Single data entry `pushTengFrame(t1..t4)` (volts) — **only the demo feeds it today**; no TENG frame format, parser branch or CSV columns exist yet. Shows "No TENG input" when empty. |
+| `Theme.pde` | Palette (`UI_*`, incl. TENG `UI_T1..UI_T4`), fonts (`useUIFont/useMonoFont`), panel/badge helpers. |
 
 **Data flow:**
 ```
@@ -89,7 +92,7 @@ BLE:    BLE_Arduino.ino ──NUS──► ble_bridge.py ──stdout thread─�
 
 ## Rendering Architecture (read before touching any UI)
 
-All drawing happens in a **fixed design space** of `DESIGN_W × DESIGN_H = 1350 × 940`. `draw()` wraps every panel in `translate(_uiOffsetX, _uiOffsetY); scale(_uiScale)` to letterbox-fit the resizable window. Consequences:
+All drawing happens in a **fixed design space** of `DESIGN_W × DESIGN_H = 1730 × 940`: the force dashboard occupies x < `MAIN_W` (1350), the right column x = 1340..1700 (Material card y 30..190, TENG panel y 210..910). `draw()` wraps every panel in `translate(_uiOffsetX, _uiOffsetY); scale(_uiScale)` to letterbox-fit the resizable window. Consequences:
 
 - **Always position panels in design coordinates** (constants like `FV_3D_X`, `RP_X`). Never use raw `width`/`height` for layout.
 - **Hit-test mouse with `uiMouseX()/uiMouseY()`** (and `uiPMouseX/Y` for deltas). Raw `mouseX/mouseY` is wrong whenever the window isn't at 1× scale.
@@ -110,7 +113,7 @@ Keyboard (`keyPressed` in `TDF_Visual.pde`):
 
 | Key | Context | Action |
 |-----|---------|--------|
-| `S` / `B` | chooser screen | Pick Serial / BLE |
+| `S` / `B` / `D` | chooser screen | Pick Serial / BLE / Demo (simulated) |
 | `ESC` | connected | Back to source chooser (does not quit) |
 | `T` | running | Toggle S ↔ D matrix view |
 | `1` / `2` / `3` | running | Select sensor H2 / H4 / H6 |

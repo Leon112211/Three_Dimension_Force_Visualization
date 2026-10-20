@@ -66,6 +66,12 @@ void drawRecButton(boolean hover) {
     int sec = (millis() - _csvStartMs) / 1000;
     text("STOP " + sec + "s",
          REC_BTN_X + REC_BTN_W / 2.0, REC_BTN_Y + REC_BTN_H / 2.0 + 1);
+  } else if (connMode == CONN_DEMO) {   // recording disabled for simulated data
+    fill(110);
+    useUIFont(13);
+    textAlign(CENTER, CENTER);
+    text("REC n/a",
+         REC_BTN_X + REC_BTN_W / 2.0, REC_BTN_Y + REC_BTN_H / 2.0 + 1);
   } else {
     fill(_csvNamingPending ? UI_MUTED : UI_TEXT);
     useUIFont(13);

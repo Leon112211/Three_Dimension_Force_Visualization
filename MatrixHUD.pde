@@ -8,7 +8,7 @@ boolean _showDecoupling = false;
 // --- MatrixHUD layout (design coords; shared by draw + click hit-test) ---
 static final int MX_PANEL_W = 450;
 static final int MX_PANEL_H = 160;
-static final int MX_PX = DESIGN_W - MX_PANEL_W - 30;
+static final int MX_PX = MAIN_W - MX_PANEL_W - 30;   // right-aligned in the force dashboard
 static final int MX_PY = 30;
 static final int MX_TAB_W = 52;
 static final int MX_TAB_H = 22;

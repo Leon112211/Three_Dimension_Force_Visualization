@@ -22,6 +22,12 @@ color UI_Y = 0xFF66E07D;
 color UI_Z = 0xFFFFA23D;
 color UI_RESULT = 0xFFFFF5B8;
 
+// Triboelectric channels T1..T4 (kept clear of the X/Y/Z blue/green/orange)
+color UI_T1 = 0xFFB69CFF;   // violet
+color UI_T2 = 0xFFF472B6;   // pink
+color UI_T3 = 0xFF2DD4BF;   // teal
+color UI_T4 = 0xFFFACC15;   // yellow
+
 PFont UI_FONT;
 PFont UI_MONO;
 

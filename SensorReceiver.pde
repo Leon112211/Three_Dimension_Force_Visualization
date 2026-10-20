@@ -104,16 +104,23 @@ void parseCSVLine(String line) {
       return;
     }
 
-    sensorBx = bx;
-    sensorBy = by;
-    sensorBz = bz;
-    newDataAvailable = true;
-    _lastSampleMs = millis();
-    _validFrameCount++;
-    csvRecordRow(bx, by, bz);   // CsvExport.pde — no-op unless recording
+    acceptFrame(bx, by, bz, true);
   } catch (Exception e) {
     recordBadFrame(line, "parse error: " + e.getMessage());
   }
+}
+
+// Publish one valid frame to the shared sensor globals. Real transports pass
+// recordCsv=true; the demo source (DemoSource.pde) passes false so simulated
+// frames never end up in csv_export/.
+void acceptFrame(float bx, float by, float bz, boolean recordCsv) {
+  sensorBx = bx;
+  sensorBy = by;
+  sensorBz = bz;
+  newDataAvailable = true;
+  _lastSampleMs = millis();
+  _validFrameCount++;
+  if (recordCsv) csvRecordRow(bx, by, bz);   // CsvExport.pde — no-op unless recording
 }
 
 boolean shouldIgnoreSerialLine(String line) {
